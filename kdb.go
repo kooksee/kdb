@@ -3,7 +3,6 @@
 package kdb
 
 import (
-	"encoding/binary"
 	"errors"
 	"math/rand"
 
@@ -62,7 +61,7 @@ func (db *Database) Close() {
 	(*bolt.DB)(db).Close()
 }
 
-func newKdb(db *Database, id, mode string) (kdb, error) {
+func newKdb(db *Database, id, mode string) (*kdb, error) {
 
 	// 数据bucket的名字
 	name := []byte(id)
@@ -88,7 +87,7 @@ func newKdb(db *Database, id, mode string) (kdb, error) {
 		return nil, err
 	}
 
-	return kdb{db:db, name:name, mode:mode}, nil
+	return &kdb{db:db, name:name, mode:mode}, nil
 }
 
 /* --- kdb functions --- */
@@ -113,14 +112,14 @@ func (k *kdb) push(value ...[]byte) error {
 
 
 // 取数据
-func (l *kdb) popN(n int, m int) (keys [][]byte, values [][]byte, err error) {
-	return keys, values, (*bolt.DB)(l.db).Update(func(tx *bolt.Tx) error {
+func (k *kdb) popN(n int, m int) (keys [][]byte, values [][]byte, err error) {
+	return keys, values, (*bolt.DB)(k.db).Update(func(tx *bolt.Tx) error {
 		var (
 			key []byte
 			value []byte
 		)
 
-		bucket := tx.Bucket(l.name)
+		bucket := tx.Bucket(k.name)
 		length := ByteToInt(bucket.Get(konst.length))
 
 		for n > 0 {
@@ -147,11 +146,11 @@ func (l *kdb) popN(n int, m int) (keys [][]byte, values [][]byte, err error) {
 	})
 }
 
-func (l *kdb) popByRandom(n int) (keys [][]byte, values [][]byte, err error) {
-	return keys, values, (*bolt.DB)(l.db).Update(func(tx *bolt.Tx) error {
+func (k *kdb) popByRandom(n int) (keys [][]byte, values [][]byte, err error) {
+	return keys, values, (*bolt.DB)(k.db).Update(func(tx *bolt.Tx) error {
 		random := map[int]bool{}
 
-		bucket := tx.Bucket(l.name)
+		bucket := tx.Bucket(k.name)
 		length := ByteToInt(bucket.Get(konst.length))
 
 		if n > length {
@@ -193,13 +192,13 @@ func (l *kdb) popByRandom(n int) (keys [][]byte, values [][]byte, err error) {
 	})
 }
 
-func (l *kdb) popByKeys(keys ...[]byte) (values [][]byte, err error) {
-	return values, (*bolt.DB)(l.db).Update(func(tx *bolt.Tx) error {
+func (k *kdb) popByKeys(keys ...[]byte) (values [][]byte, err error) {
+	return values, (*bolt.DB)(k.db).Update(func(tx *bolt.Tx) error {
 		var (
 			value []byte
 		)
 
-		bucket := tx.Bucket(l.name)
+		bucket := tx.Bucket(k.name)
 		length := ByteToInt(bucket.Get(konst.length))
 
 		if length <= 0 {
@@ -221,17 +220,17 @@ func (l *kdb) popByKeys(keys ...[]byte) (values [][]byte, err error) {
 	})
 }
 
-func (l *kdb) drop() error {
-	err := (*bolt.DB)(l.db).Update(func(tx *bolt.Tx) error {
-		return tx.DeleteBucket([]byte(l.name))
+func (k *kdb) drop() error {
+	err := (*bolt.DB)(k.db).Update(func(tx *bolt.Tx) error {
+		return tx.DeleteBucket([]byte(k.name))
 	})
-	l.name = nil
+	k.name = nil
 	return err
 }
 
-func (l *kdb) keys() (ks [][]byte, err error) {
-	return ks, (*bolt.DB)(l.db).View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(l.name)
+func (k *kdb) keys() (ks [][]byte, err error) {
+	return ks, (*bolt.DB)(k.db).View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(k.name)
 		cursor := bucket.Cursor()
 		for key, _ := cursor.First(); key != nil; key, _ = cursor.Next() {
 			ks = append(ks, key)
@@ -251,9 +250,9 @@ func (l *kdb) values() (vs [][]byte, err error) {
 	})
 }
 
-func (l *kdb) set(k []byte, v []byte) error {
-	return (*bolt.DB)(l.db).Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(l.name)
+func (this *kdb) set(k []byte, v []byte) error {
+	return (*bolt.DB)(this.db).Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(this.name)
 		if k == nil || v == nil {
 			return errors.New("key or value 为空")
 		}
@@ -261,9 +260,9 @@ func (l *kdb) set(k []byte, v []byte) error {
 	})
 }
 
-func (l *kdb) get(k []byte) (v []byte, err error) {
-	return v, (*bolt.DB)(l.db).View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(l.name)
+func (this *kdb) get(k []byte) (v []byte, err error) {
+	return v, (*bolt.DB)(this.db).View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(this.name)
 		v = bucket.Get(k)
 		if v == nil {
 			return ErrKeyNotFound
@@ -273,12 +272,9 @@ func (l *kdb) get(k []byte) (v []byte, err error) {
 }
 
 // Get all elements of a kdb
-func (l *kdb) GetAll() (results []string, err error) {
-	if l.name == nil {
-		return nil, ErrDoesNotExist
-	}
-	return results, (*bolt.DB)(l.db).View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(l.name)
+func (k *kdb) GetAll() (results []string, err error) {
+	return results, (*bolt.DB)(k.db).View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(k.name)
 		if bucket == nil {
 			return ErrBucketNotFound
 		}
@@ -290,15 +286,9 @@ func (l *kdb) GetAll() (results []string, err error) {
 }
 
 // Get the last element of a kdb
-func (l *kdb) GetLast() (result string, err error) {
-	if l.name == nil {
-		return "", ErrDoesNotExist
-	}
-	return result, (*bolt.DB)(l.db).View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(l.name)
-		if bucket == nil {
-			return ErrBucketNotFound
-		}
+func (k *kdb) GetLast() (result string, err error) {
+	return result, (*bolt.DB)(k.db).View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(k.name)
 		cursor := bucket.Cursor()
 		// Ignore the key
 		_, value := cursor.Last()
@@ -307,13 +297,60 @@ func (l *kdb) GetLast() (result string, err error) {
 	})
 }
 
+func (k *kdb)length() (n int, err error) {
+	return n, (*bolt.DB)(k.db).View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(k.name)
+		n = ByteToInt(bucket.Get(konst.length))
+		return nil
+	})
+}
+
+func (k *kdb)index(n int) (v []byte, err error) {
+	return v, (*bolt.DB)(k.db).View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(k.name)
+		v = bucket.Get(IntToByte(n))
+		return nil
+	})
+}
+
+func (this *kdb)first(n int) (k, v []byte, err error) {
+	return v, (*bolt.DB)(this.db).View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(this.name)
+		k, v = bucket.Cursor().First()
+		return nil
+	})
+}
+
+func (this *kdb)last(n int) (k, v []byte, err error) {
+	return v, (*bolt.DB)(this.db).View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(this.name)
+		k, v = bucket.Cursor().Last()
+		return nil
+	})
+}
+
+func (k *kdb)ranger(start, end, skip int) (v [][]byte, err error) {
+	return v, (*bolt.DB)(k.db).View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(k.name)
+		_, v = bucket.Cursor().Last()
+		return nil
+	})
+}
+
+func (k *kdb)filterF(f func() bool) {
+}
+
+func (k *kdb)mapF(f func() []byte) {
+}
+
+func (k *kdb)reduceF(f func() []byte) {
+}
+
+
 // Get the last N elements of a kdb
-func (l *kdb) GetLastN(n int) (results []string, err error) {
-	if l.name == nil {
-		return nil, ErrDoesNotExist
-	}
-	return results, (*bolt.DB)(l.db).View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(l.name)
+func (k *kdb) GetLastN(n int) (results []string, err error) {
+	return results, (*bolt.DB)(k.db).View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(k.name)
 		if bucket == nil {
 			return ErrBucketNotFound
 		}
@@ -344,12 +381,9 @@ func (l *kdb) GetLastN(n int) (results []string, err error) {
 
 
 // Remove all elements from this kdb
-func (l *kdb) Clear() error {
-	if l.name == nil {
-		return ErrDoesNotExist
-	}
-	return (*bolt.DB)(l.db).Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(l.name)
+func (k *kdb) Clear() error {
+	return (*bolt.DB)(k.db).Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(k.name)
 		if bucket == nil {
 			return ErrBucketNotFound
 		}
@@ -359,21 +393,3 @@ func (l *kdb) Clear() error {
 	})
 }
 
-/* --- HashMap functions --- */
-
-
-//fields := strings.SplitN(combinedKey, ":", 2)
-//strings.Contains(combinedKey, ":")
-// converted, err := strconv.Atoi(val)
-//val = strconv.Itoa(num)
-
-// Create a byte slice from an uint64
-func IntToByte(x uint64) []byte {
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, x)
-	return b
-}
-
-func ByteToInt(x []byte) uint64 {
-	return binary.BigEndian.Uint64(x)
-}
