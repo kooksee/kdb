@@ -9,11 +9,6 @@ import (
 	"github.com/boltdb/bolt"
 )
 
-const (
-	// 版本号
-	Version = 3.0
-)
-
 type (
 	// A Bolt database
 	Database bolt.DB
@@ -21,12 +16,7 @@ type (
 	kdb struct {
 		db   *Database // the Bolt database
 		name []byte    // the bucket name
-		mode string    // 设置模式,队列,字典,列表,集合等
 	}
-
-	// The wrapped datatypes
-	KSet      kdb
-	KHashMap  kdb
 )
 
 var (
@@ -61,7 +51,7 @@ func (db *Database) Close() {
 	(*bolt.DB)(db).Close()
 }
 
-func newKdb(db *Database, id, mode string) (*kdb, error) {
+func newKdb(db *Database, id string) (*kdb, error) {
 
 	// 数据bucket的名字
 	name := []byte(id)
@@ -87,7 +77,7 @@ func newKdb(db *Database, id, mode string) (*kdb, error) {
 		return nil, err
 	}
 
-	return &kdb{db:db, name:name, mode:mode}, nil
+	return &kdb{db:db, name:name}, nil
 }
 
 /* --- kdb functions --- */
@@ -96,7 +86,6 @@ func newKdb(db *Database, id, mode string) (*kdb, error) {
 func (k *kdb) push(value ...[]byte) error {
 	return (*bolt.DB)(k.db).Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(k.name)
-
 		length := ByteToInt(bucket.Get(konst.length))
 		for _, v := range value {
 			if err := bucket.Put(IntToByte(bucket.Sequence()), v); err != nil {
@@ -115,33 +104,41 @@ func (k *kdb) push(value ...[]byte) error {
 func (k *kdb) popN(n int, m int) (keys [][]byte, values [][]byte, err error) {
 	return keys, values, (*bolt.DB)(k.db).Update(func(tx *bolt.Tx) error {
 		var (
-			key []byte
 			value []byte
 		)
 
 		bucket := tx.Bucket(k.name)
 		length := ByteToInt(bucket.Get(konst.length))
-
-		for n > 0 {
-			cursor := bucket.Cursor()
-			if m == 0 {
-				key, value = cursor.First()
-			} else {
-				key, value = cursor.Last()
+		cursor := bucket.Cursor()
+		if m == 0 {
+			for key, _ := cursor.First(); n > 0; key, _ = cursor.Next() {
+				if key == nil {
+					bucket.SetSequence(0)
+					length = 0
+					break
+				}
+				bucket.Delete(key)
+				keys = append(keys, key)
+				values = append(values, value)
+				n--
+				length--
 			}
-
-			if key == nil {
-				bucket.SetSequence(0)
-				return ErrEmpty
-			}
-
-			bucket.Delete(key)
-			keys = append(keys, key)
-			values = append(values, value)
-			n--
-			length--
 		}
 
+		if m == 1 {
+			for key, _ := cursor.Last(); n > 0; key, _ = cursor.Prev() {
+				if key == nil {
+					bucket.SetSequence(0)
+					length = 0
+					break
+				}
+				bucket.Delete(key)
+				keys = append(keys, key)
+				values = append(values, value)
+				n--
+				length--
+			}
+		}
 		return bucket.Put(konst.length, IntToByte(length))
 	})
 }
@@ -263,11 +260,7 @@ func (this *kdb) set(k []byte, v []byte) error {
 func (this *kdb) get(k []byte) (v []byte, err error) {
 	return v, (*bolt.DB)(this.db).View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(this.name)
-		v = bucket.Get(k)
-		if v == nil {
-			return ErrKeyNotFound
-		}
-		return nil
+		return bucket.Get(k)
 	})
 }
 
@@ -285,19 +278,7 @@ func (k *kdb) GetAll() (results []string, err error) {
 	})
 }
 
-// Get the last element of a kdb
-func (k *kdb) GetLast() (result string, err error) {
-	return result, (*bolt.DB)(k.db).View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(k.name)
-		cursor := bucket.Cursor()
-		// Ignore the key
-		_, value := cursor.Last()
-		result = string(value)
-		return nil // Return from View function
-	})
-}
-
-func (k *kdb)length() (n int, err error) {
+func (k *kdb)length() (n int) {
 	return n, (*bolt.DB)(k.db).View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(k.name)
 		n = ByteToInt(bucket.Get(konst.length))
@@ -305,26 +286,28 @@ func (k *kdb)length() (n int, err error) {
 	})
 }
 
-func (k *kdb)index(n int) (v []byte, err error) {
-	return v, (*bolt.DB)(k.db).View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(k.name)
-		v = bucket.Get(IntToByte(n))
+func (this *kdb)first(n int) (k, v [][]byte, err error) {
+	return k, v, (*bolt.DB)(this.db).View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(this.name)
+		cursor := bucket.Cursor()
+		for key, value := cursor.First(); key != nil && n > 0; key, value = cursor.Next() {
+			k = append(k, key)
+			v = append(v, value)
+			n--
+		}
 		return nil
 	})
 }
 
-func (this *kdb)first(n int) (k, v []byte, err error) {
+func (this *kdb)last(n int) (k, v [][]byte, err error) {
 	return v, (*bolt.DB)(this.db).View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(this.name)
-		k, v = bucket.Cursor().First()
-		return nil
-	})
-}
-
-func (this *kdb)last(n int) (k, v []byte, err error) {
-	return v, (*bolt.DB)(this.db).View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(this.name)
-		k, v = bucket.Cursor().Last()
+		cursor := bucket.Cursor()
+		for key, value := cursor.Last(); key != nil && n > 0; key, value = cursor.Prev() {
+			k = append(k, key)
+			v = append(v, value)
+			n--
+		}
 		return nil
 	})
 }
