@@ -1,6 +1,0 @@
-[target]
-path = kdb
-
-[deps]
-github.com/boltdb/bolt = 
-
