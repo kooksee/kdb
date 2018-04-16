@@ -3,14 +3,11 @@ package kdb
 import (
 	"bytes"
 	"regexp"
-	"errors"
-
 	"github.com/dgraph-io/badger"
 )
 
 type KDB struct {
-	db        *badger.DB
-	operators map[string]*badger.MergeOperator
+	db *badger.DB
 
 	kdir string
 	hmap map[string]*KHash
@@ -34,7 +31,7 @@ func InitKdb(path string) {
 		if err != nil {
 			panic(err.Error())
 		}
-		kdb = &KDB{db: db, operators: make(map[string]*badger.MergeOperator)}
+		kdb = &KDB{db: db}
 	})
 }
 
@@ -78,6 +75,18 @@ func (k *KDB) UpdateWithTx(fn func(txn *badger.Txn) error) error {
 	})
 }
 
+func (k *KDB) KHPrefix(name []byte) []byte {
+	return []byte(f("h/%s/", name))
+}
+
+func (k *KDB) KLPrefix(name []byte) []byte {
+	return []byte(f("l/%s/", name))
+}
+
+func (h *KDB) K(prefix, key []byte) []byte {
+	return BConcat(prefix, key)
+}
+
 func (k *KDB) exist(txn *badger.Txn, key []byte) (bool, error) {
 	res, err := k.get(txn, key)
 	if err != nil {
@@ -85,7 +94,7 @@ func (k *KDB) exist(txn *badger.Txn, key []byte) (bool, error) {
 	}
 
 	if res != nil {
-		return false, errors.New("key不存在")
+		return false, nil
 	}
 
 	return true, nil
@@ -238,9 +247,7 @@ func (k *KDB) Drop(txn *badger.Txn, prefix ... []byte) error {
 	defer iter.Close()
 
 	for _, name := range prefix {
-
-		iter.Seek(name)
-		for ; iter.ValidForPrefix(name); iter.Next() {
+		for iter.Seek(name); iter.ValidForPrefix(name); iter.Next() {
 			if err := txn.Delete(iter.Item().Key()); err != nil {
 				return err
 			}
@@ -337,16 +344,11 @@ func (k *KDB) Len(txn *badger.Txn, prefix []byte) (int, error) {
 	defer iter.Close()
 
 	i := 0
-	iter.Seek(prefix)
-	for ; iter.ValidForPrefix(prefix); iter.Next() {
+	for iter.Seek(prefix); iter.ValidForPrefix(prefix); iter.Next() {
 		if _, err := iter.Item().Value(); err != nil {
 			return 0, err
 		}
 		i++
-	}
-
-	if i < 2 {
-		return 0, nil
 	}
 
 	return i, nil

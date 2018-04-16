@@ -7,12 +7,11 @@ type KHash struct {
 	prefix   []byte
 	firstKey []byte
 	lastKey  []byte
-	countKey []byte
-	count    int
 
 	db *KDB
 }
 
+// NewKHash 初始化khash
 func NewKHash(name string, db *KDB) *KHash {
 	kh := &KHash{name: name, db: db}
 
@@ -20,26 +19,6 @@ func NewKHash(name string, db *KDB) *KHash {
 	kh.prefix = kh.Prefix()
 	kh.firstKey = kh.FirstKey()
 	kh.lastKey = kh.LastKey()
-
-	err := kh.db.UpdateWithTx(func(txn *badger.Txn) (err error) {
-
-		// 加载counter计数
-		kh.count, err = kh.db.Len(txn, kh.prefix)
-		if err != nil {
-			return err
-		}
-
-		// 设置类型第一个和最后一个值
-		return kh.db.mSet(
-			txn,
-			&KV{kh.firstKey, []byte("ok")},
-			&KV{kh.LastKey(), []byte("ok")},
-		)
-	})
-
-	if err != nil {
-		panic(err.Error())
-	}
 
 	return kh
 }
@@ -61,13 +40,9 @@ func (h *KHash) K(key []byte) []byte {
 	return BConcat(h.prefix, key)
 }
 
-func (h *KHash) Get(key []byte) (v []byte, err error) {
+func (h *KHash) Get(key []byte) ([]byte, error) {
 	vals, err := h.MGet(key)
-	if err != nil {
-		return nil, err
-	}
-
-	return vals[0], nil
+	return vals[0], err
 }
 
 func (h *KHash) MGet(keys ... []byte) (vals [][]byte, err error) {
