@@ -242,6 +242,49 @@ func (k *KDB) PopN(txn *badger.Txn, isReverse bool, min, max []byte, n int, fn f
 	return nil
 }
 
+func (k *KDB) PopRandom(txn *badger.Txn, prefix []byte, n int, fn func(i int, key, value []byte)) error {
+
+	opt := badger.DefaultIteratorOptions
+	opt.Reverse = false
+
+	iter := txn.NewIterator(opt)
+	defer iter.Close()
+
+	cnt, err := k.Len(txn, prefix)
+	if err != nil {
+		return err
+	}
+
+	if cnt < n {
+		return k.Scan(txn, prefix, 0, func(i int, key, value []byte) bool {
+			fn(i, key, value)
+			return true
+		})
+	}
+
+	rmd := genRandom(0, cnt, n)
+	for i := 0; iter.Valid(); iter.Next() {
+		if !rmd[i] || i >= n {
+			continue
+		}
+
+		v, err := iter.Item().Value()
+		if err != nil {
+			return err
+		}
+
+		k := iter.Item().Key()
+		if err := txn.Delete(k); err != nil {
+			return err
+		}
+
+		fn(i, k, v)
+		i++
+	}
+
+	return nil
+}
+
 func (k *KDB) Drop(txn *badger.Txn, prefix ... []byte) error {
 	iter := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer iter.Close()
