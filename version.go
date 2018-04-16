@@ -1,3 +1,3 @@
 package kdb
 
-const Version = 3.0
+const Version = 0.1
