@@ -18,19 +18,18 @@ func NewKHash(name string, db *KDB) *KHash {
 
 	// 设置前缀
 	kh.prefix = kh.Prefix()
-	kh.countKey = kh.CountKey()
 	kh.firstKey = kh.FirstKey()
 	kh.lastKey = kh.LastKey()
 
-	err := kh.db.UpdateWithTx(func(txn *badger.Txn) error {
-		cnt, err := kh.db.count(txn, kh.CountKey())
+	err := kh.db.UpdateWithTx(func(txn *badger.Txn) (err error) {
+
+		// 加载counter计数
+		kh.count, err = kh.db.Len(txn, kh.prefix)
 		if err != nil {
 			return err
 		}
 
-		kh.count = cnt
-
-		// 设置类型第一个值
+		// 设置类型第一个和最后一个值
 		return kh.db.mSet(
 			txn,
 			&KV{kh.firstKey, []byte("ok")},
@@ -58,12 +57,8 @@ func (h *KHash) LastKey() []byte {
 	return append(h.prefix, MAXBYTE)
 }
 
-func (h *KHash) CountKey() []byte {
-	return h.db.CountKey(h.prefix)
-}
-
 func (h *KHash) K(key []byte) []byte {
-	return append(h.prefix, key...)
+	return BConcat(h.prefix, key)
 }
 
 func (h *KHash) Get(key []byte) (v []byte, err error) {
@@ -77,25 +72,22 @@ func (h *KHash) Get(key []byte) (v []byte, err error) {
 
 func (h *KHash) MGet(keys ... []byte) (vals [][]byte, err error) {
 	return vals, h.db.GetWithTx(func(txn *badger.Txn) error {
-		vals, err = h.db.mGet(txn, BMap(keys, func(_ int, k []byte) []byte {
-			return h.K(k)
-		})...)
+		vals, err = (&KHBatch{txn: txn, kh: h}).MGet(keys...)
 		return err
 	})
 }
 
-func (h *KHash) Del(k []byte) error {
-	return h.MDel(k)
-}
-
-func (h *KHash) MDel(k ... []byte) error {
+func (h *KHash) Del(keys ... []byte) error {
 	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return h.db.mDel(txn, k...)
+		return (&KHBatch{txn: txn, kh: h}).MDel(keys...)
 	})
 }
 
-func (h *KHash) Exist(k []byte) (bool, error) {
-	return h.db.exist(h.K(k))
+func (h *KHash) Exist(k []byte) (b bool, err error) {
+	return b, h.db.GetWithTx(func(txn *badger.Txn) error {
+		b, err = (&KHBatch{txn: txn, kh: h}).Exist(k)
+		return err
+	})
 }
 
 func (h *KHash) Drop() error {
@@ -106,7 +98,7 @@ func (h *KHash) Drop() error {
 
 func (h *KHash) Len() (l int, err error) {
 	return l, h.db.GetWithTx(func(txn *badger.Txn) error {
-		l, err = h.db.count(txn, h.countKey)
+		l, err = (&KHBatch{txn: txn, kh: h}).Len()
 		return err
 	})
 }
@@ -117,19 +109,18 @@ func (h *KHash) Set(key, value []byte) error {
 
 func (h *KHash) MSet(kvs ... *KV) error {
 	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		kb := &KBatch{kh: h, txn: txn}
-		return kb.MSet(kvs...)
+		return (&KHBatch{kh: h, txn: txn}).MSet(kvs...)
 	})
 }
 
-func (h *KHash) BatchView(fn func(*KBatch) error) error {
+func (h *KHash) BatchView(fn func(*KHBatch) error) error {
 	return h.db.GetWithTx(func(txn *badger.Txn) error {
-		return fn(&KBatch{kh: h, txn: txn})
+		return fn(&KHBatch{kh: h, txn: txn})
 	})
 }
 
-func (h *KHash) BatchUpdate(fn func(k *KBatch) error) error {
+func (h *KHash) BatchUpdate(fn func(k *KHBatch) error) error {
 	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return fn(&KBatch{kh: h, txn: txn})
+		return fn(&KHBatch{kh: h, txn: txn})
 	})
 }

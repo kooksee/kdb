@@ -2,9 +2,10 @@ package kdb
 
 import (
 	"bytes"
-	"github.com/dgraph-io/badger"
 	"regexp"
-	"github.com/kataras/iris/core/errors"
+	"errors"
+
+	"github.com/dgraph-io/badger"
 )
 
 type KDB struct {
@@ -54,10 +55,11 @@ func (k *KDB) KHash(name string) *KHash {
 }
 
 func (k *KDB) KList(name string) *KList {
-	if l, ok := k.lmap[name]; ok {
-		return l
+	if _, ok := k.lmap[name]; !ok {
+		k.lmap[name] = NewKList(name, k)
 	}
-	return &KList{}
+
+	return k.lmap[name]
 }
 
 func (k *KDB) close() error {
@@ -76,35 +78,26 @@ func (k *KDB) UpdateWithTx(fn func(txn *badger.Txn) error) error {
 	})
 }
 
-func (k *KDB) get(txn *badger.Txn, key []byte) ([]byte, error) {
-	item, err := txn.Get(key)
-	if err == badger.ErrKeyNotFound {
-		return nil, nil
+func (k *KDB) exist(txn *badger.Txn, key []byte) (bool, error) {
+	res, err := k.get(txn, key)
+	if err != nil {
+		return false, err
 	}
 
+	if res != nil {
+		return false, errors.New("key不存在")
+	}
+
+	return true, nil
+}
+
+func (k *KDB) get(txn *badger.Txn, key []byte) ([]byte, error) {
+	vals, err := k.mGet(txn, key)
 	if err != nil {
 		return nil, err
 	}
 
-	return item.Value()
-}
-
-func (k *KDB) exist(key []byte) (b bool, err error) {
-	return b, k.db.View(func(txn *badger.Txn) error {
-		res, err := k.get(txn, key)
-		if err != nil {
-			b = false
-			return err
-		}
-
-		if res != nil {
-			b = false
-			return errors.New("key不存在")
-		}
-
-		b = true
-		return nil
-	})
+	return vals[0], nil
 }
 
 // MGet 取多个值
@@ -281,7 +274,7 @@ func (k *KDB) Scan(txn *badger.Txn, prefix []byte, n int, fn func(i int, key, va
 // ScanRandom 根据前缀随机扫描
 func (k *KDB) ScanRandom(txn *badger.Txn, prefix []byte, count int, fn func(i int, key, value []byte) bool) error {
 
-	cnt, err := k.count(txn, prefix)
+	cnt, err := k.Len(txn, prefix)
 	if err != nil {
 		return err
 	}
@@ -338,32 +331,23 @@ func (k *KDB) ScanPattern(txn *badger.Txn, pattern string, prefix []byte, fn fun
 	return nil
 }
 
+// 根据前缀扫描数据数量
 func (k *KDB) Len(txn *badger.Txn, prefix []byte) (int, error) {
-	return k.count(txn, prefix)
-}
+	iter := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer iter.Close()
 
-// INCRBY key原子自增
-func (k *KDB) INCRBY(txn *badger.Txn, name []byte, n int) error {
-	cnt, err := k.count(txn, name)
-	if err != nil {
-		return err
-	}
-	return txn.Set(name, IntToByte(n+cnt))
-}
-
-func (k *KDB) CountKey(prefix []byte) []byte {
-	return BConcat([]byte("__m/"), prefix, []byte("count"))
-}
-
-func (k *KDB) count(txn *badger.Txn, prefix []byte) (int, error) {
-	v, err := k.get(txn, k.CountKey(prefix))
-	if err != nil {
-		return 0, err
+	i := 0
+	iter.Seek(prefix)
+	for ; iter.ValidForPrefix(prefix); iter.Next() {
+		if _, err := iter.Item().Value(); err != nil {
+			return 0, err
+		}
+		i++
 	}
 
-	if v == nil {
+	if i < 2 {
 		return 0, nil
 	}
 
-	return ByteToInt(v), nil
+	return i, nil
 }
