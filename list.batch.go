@@ -3,7 +3,6 @@ package kdb
 import (
 	"github.com/dgraph-io/badger"
 	"bytes"
-	"github.com/kataras/iris/core/errors"
 )
 
 type KLBatch struct {
@@ -123,21 +122,10 @@ func (k *KLBatch) RangeIter(start, end int, fn func(i int, key int, value []byte
 	})
 }
 
-func (k *KLBatch) Rem(start, end int) error {
-	if start > end {
-		return errors.New("start must be less than end")
+func (k *KLBatch) PopPush(n int, other string) (vals [][]byte, err error) {
+	vals, err = k.RPopN(n)
+	if err != nil {
+		return nil, err
 	}
-
-	if end > k.kl.count {
-		end = k.kl.count
-	}
-
-	var vals [][]byte
-	for i := start; i <= end; i++ {
-		vals = append(vals, k.kl.K(i))
-	}
-	if err := k.kl.db.mDel(k.txn, vals...); err != nil {
-		return err
-	}
-
+	return vals, (&KLBatch{kl: k.kl.db.KList(other), txn: k.txn}).Push(vals...)
 }

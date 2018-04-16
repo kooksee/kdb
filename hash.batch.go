@@ -2,7 +2,6 @@ package kdb
 
 import (
 	"github.com/dgraph-io/badger"
-	"github.com/kataras/iris/core/errors"
 	"bytes"
 )
 
@@ -72,17 +71,9 @@ func (k *KHBatch) Map(fn func(batch *KHBatch, i int, key, value []byte)) error {
 	})
 }
 
-func (k *KHBatch) GetSet(key []byte, other []byte) (val []byte, err error) {
-	return val, k.kh.db.UpdateWithTx(func(txn *badger.Txn) error {
-		val, err = k.kh.db.get(txn, k.kh.K(key))
-		if err != nil {
-			return err
-		}
-		if val == nil {
-			return errors.New("key不存在")
-		}
-		return k.kh.db.set(txn, k.kh.db.K(k.kh.db.KHPrefix(other), key), val)
-	})
+func (k *KHBatch) GetSet(key []byte, other string) (val []byte, err error) {
+	val, err = k.Get(k.kh.K(key))
+	return val, (&KHBatch{txn: k.txn, kh: k.kh.db.KHash(other)}).Set(key, val)
 }
 
 func (k *KHBatch) Range(fn func(i int, key, value []byte)) error {
