@@ -83,7 +83,7 @@ func (k *KDB) KLPrefix(name []byte) []byte {
 	return []byte(f("l/%s/", name))
 }
 
-func (h *KDB) K(prefix, key []byte) []byte {
+func (k *KDB) K(prefix, key []byte) []byte {
 	return BConcat(prefix, key)
 }
 
@@ -102,11 +102,7 @@ func (k *KDB) exist(txn *badger.Txn, key []byte) (bool, error) {
 
 func (k *KDB) get(txn *badger.Txn, key []byte) ([]byte, error) {
 	vals, err := k.mGet(txn, key)
-	if err != nil {
-		return nil, err
-	}
-
-	return vals[0], nil
+	return vals[0], err
 }
 
 // MGet 取多个值
@@ -187,18 +183,22 @@ func (k *KDB) ScanRange(txn *badger.Txn, isReverse bool, min, max []byte, fn fun
 			return err
 		}
 
-		if between(iter.Item().Key(), min, max) && fn(i, iter.Item().Key(), v) {
+		k := iter.Item().Key()
+		if !between(k, min, max) {
+			break
+		}
+
+		if fn(i, k, v) {
 			i++
 			continue
 		}
-
-		return nil
+		break
 	}
 
 	return nil
 }
 
-func (k *KDB) PopN(txn *badger.Txn, isReverse bool, min, max []byte, n int, fn func(i int, key, value []byte) bool) error {
+func (k *KDB) PopN(txn *badger.Txn, isReverse bool, min, max []byte, n int, fn func(i int, key, value []byte)) error {
 
 	opt := badger.DefaultIteratorOptions
 	opt.Reverse = isReverse
@@ -220,7 +220,7 @@ func (k *KDB) PopN(txn *badger.Txn, isReverse bool, min, max []byte, n int, fn f
 		}
 	}
 
-	for i := 0; iter.Valid() && between(iter.Item().Key(), min, max) && i < n; iter.Next() {
+	for i := 0; iter.Valid() && i < n; iter.Next() {
 
 		v, err := iter.Item().Value()
 		if err != nil {
@@ -228,15 +228,19 @@ func (k *KDB) PopN(txn *badger.Txn, isReverse bool, min, max []byte, n int, fn f
 		}
 
 		k := iter.Item().Key()
-		if !fn(i, k, v) {
-			break
-		}
-
 		if err := txn.Delete(k); err != nil {
 			return err
 		}
 
+		if !between(k, min, max) {
+			break
+		}
+
+		fn(i, k, v)
+
 		i++
+
+		return nil
 	}
 
 	return nil
@@ -257,7 +261,7 @@ func (k *KDB) PopRandom(txn *badger.Txn, prefix []byte, n int, fn func(i int, ke
 
 	if cnt < n {
 		return k.Scan(txn, prefix, 0, func(i int, key, value []byte) bool {
-			fn(i, key, value)
+			fn(i, bytes.TrimPrefix(key, prefix), value)
 			return true
 		})
 	}
@@ -278,7 +282,7 @@ func (k *KDB) PopRandom(txn *badger.Txn, prefix []byte, n int, fn func(i int, ke
 			return err
 		}
 
-		fn(i, k, v)
+		fn(i, bytes.TrimPrefix(k, prefix), v)
 		i++
 	}
 
@@ -306,7 +310,7 @@ func (k *KDB) Scan(txn *badger.Txn, prefix []byte, n int, fn func(i int, key, va
 	defer iter.Close()
 
 	iter.Seek(prefix)
-	for i := 0; iter.ValidForPrefix(prefix) && i > n; iter.Next() {
+	for i := 0; iter.ValidForPrefix(prefix) && i < n; iter.Next() {
 		v, err := iter.Item().Value()
 		if err != nil {
 			return err
@@ -393,6 +397,5 @@ func (k *KDB) Len(txn *badger.Txn, prefix []byte) (int, error) {
 		}
 		i++
 	}
-
 	return i, nil
 }
