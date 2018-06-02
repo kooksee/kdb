@@ -25,11 +25,10 @@ func InitKdb(path string) {
 		opts := badger.DefaultOptions
 		opts.Dir = path
 		opts.ValueDir = path
-		opts.SyncWrites = true
 
 		db, err := badger.Open(opts)
 		if err != nil {
-			panic(err.Error())
+			panic(Errs("badger启动数据库失败", err.Error()))
 		}
 		kdb = &KDB{db: db}
 	})

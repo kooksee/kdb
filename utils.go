@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"math/rand"
 	"time"
+	"strings"
 )
 
 func IsFileExist(path string) bool {
@@ -19,13 +20,20 @@ func IsFileExist(path string) bool {
 	return true
 }
 
+func If(b bool, trueVal, falseVal interface{}) interface{} {
+	if b {
+		return trueVal
+	}
+	return falseVal
+}
+
 // 范围判断 min <= v <= max
-func between(v, min, max []byte) bool {
+func Between(v, min, max []byte) bool {
 	return bytes.Compare(v, min) >= 0 && bytes.Compare(v, max) <= 0
 }
 
 // 复制数组
-func copyBytes(src []byte) []byte {
+func CopyBytes(src []byte) []byte {
 	dst := make([]byte, len(src))
 	copy(dst, src)
 	return dst
@@ -42,8 +50,12 @@ func ByteToInt(x []byte) int {
 	return int(binary.BigEndian.Uint64(x))
 }
 
-func f(format string, a ...interface{}) string {
+func F(format string, a ...interface{}) string {
 	return fmt.Sprintf(format, a...)
+}
+
+func Errs(errs ... string) string {
+	return strings.Join(errs, "\n")
 }
 
 // S2b converts string to a byte slice without memory allocation.

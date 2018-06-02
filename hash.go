@@ -1,9 +1,13 @@
 package kdb
 
-import "github.com/dgraph-io/badger"
+import (
+	"github.com/dgraph-io/badger"
+	"kdb/consts"
+)
 
 type KHash struct {
-	name     string
+	name string
+
 	prefix   []byte
 	firstKey []byte
 	lastKey  []byte
@@ -15,29 +19,33 @@ type KHash struct {
 func NewKHash(name string, db *KDB) *KHash {
 	kh := &KHash{name: name, db: db}
 
-	// 设置前缀
-	kh.prefix = kh.Prefix()
-	kh.firstKey = kh.FirstKey()
-	kh.lastKey = kh.LastKey()
-
 	return kh
 }
 
 // Prefix 前缀
 func (h *KHash) Prefix() []byte {
-	return []byte(f("h/%s/", h.name))
-}
-
-func (h *KHash) FirstKey() []byte {
+	if len(h.prefix) == 0 {
+		h.prefix = []byte(F("%s%s%s%s", consts.KHASH, consts.Separator, h.name, consts.Separator))
+	}
 	return h.prefix
 }
 
+func (h *KHash) FirstKey() []byte {
+	if len(h.firstKey) == 0 {
+		h.firstKey = h.Prefix()
+	}
+	return h.firstKey
+}
+
 func (h *KHash) LastKey() []byte {
-	return append(h.prefix, MAXBYTE)
+	if len(h.lastKey) == 0 {
+		h.lastKey = append(h.Prefix(), consts.MAXBYTE)
+	}
+	return h.lastKey
 }
 
 func (h *KHash) K(key []byte) []byte {
-	return BConcat(h.prefix, key)
+	return append(h.Prefix(), key...)
 }
 
 func (h *KHash) Get(key []byte) ([]byte, error) {
