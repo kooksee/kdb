@@ -145,27 +145,24 @@ func KVMap(m []*KV, fn func(int, *KV) *KV) []*KV {
 }
 
 // 生成count个[start,end)结束的不重复的随机数
-func genRandom(start int, end int, count int) map[int]bool {
+func GenRandom(start int, end int, count int) map[int]bool {
 
 	// 范围检查
 	if end < start || (end-start) < count {
 		return nil
 	}
 
-	nums := map[int]bool{}
-
 	// 随机数生成器，加入时间戳保证每次生成的随机数不一样
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	for i := 0; len(nums) < count && i < count; {
+	nums := map[int]bool{}
+	for len(nums) < count {
 
 		// 生成随机数
 		num := r.Intn(end-start) + start
 		if nums[num] {
 			continue
 		}
-
-		i++
 		nums[num] = true
 	}
 

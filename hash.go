@@ -2,7 +2,7 @@ package kdb
 
 import (
 	"github.com/dgraph-io/badger"
-	"kdb/consts"
+	"github.com/kooksee/kdb/consts"
 )
 
 type KHash struct {
@@ -48,14 +48,9 @@ func (h *KHash) K(key []byte) []byte {
 	return append(h.Prefix(), key...)
 }
 
-func (h *KHash) Get(key []byte) ([]byte, error) {
-	vals, err := h.MGet(key)
-	return vals[0], err
-}
-
-func (h *KHash) MGet(keys ... []byte) (vals [][]byte, err error) {
-	return vals, h.db.GetWithTx(func(txn *badger.Txn) error {
-		vals, err = (&KHBatch{txn: txn, kh: h}).MGet(keys...)
+func (h *KHash) Get(key []byte) (val []byte, err error) {
+	return val, h.db.GetWithTx(func(txn *badger.Txn) error {
+		val, err = h.db.get(txn, key)
 		return err
 	})
 }
@@ -75,13 +70,13 @@ func (h *KHash) Exist(k []byte) (b bool, err error) {
 
 func (h *KHash) Drop() error {
 	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return h.db.Drop(txn, h.prefix)
+		return h.db.Drop(txn, h.Prefix())
 	})
 }
 
 func (h *KHash) Len() (l int, err error) {
 	return l, h.db.GetWithTx(func(txn *badger.Txn) error {
-		l, err = (&KHBatch{txn: txn, kh: h}).Len()
+		l, err = h.db.Len(txn, h.Prefix())
 		return err
 	})
 }
@@ -93,6 +88,12 @@ func (h *KHash) Set(key, value []byte) error {
 func (h *KHash) MSet(kvs ... *KV) error {
 	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
 		return (&KHBatch{kh: h, txn: txn}).MSet(kvs...)
+	})
+}
+
+func (h *KHash) PopRandom(n int, fn func(i int, key, value []byte) bool) error {
+	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
+		return h.db.PopRandom(txn, h.Prefix(), n, fn)
 	})
 }
 
