@@ -16,10 +16,14 @@ type KHash struct {
 }
 
 // NewKHash 初始化khash
-func NewKHash(name string, db *KDB) *KHash {
+func NewKHash(name string, db *KDB) (*KHash, error) {
 	kh := &KHash{name: name, db: db}
 
-	return kh
+	if err := db.recordPrefix(kh.Prefix()); err != nil {
+		return nil, err
+	}
+
+	return kh, nil
 }
 
 // Prefix 前缀
@@ -82,7 +86,7 @@ func (h *KHash) Len() (l int, err error) {
 }
 
 func (h *KHash) Set(key, value []byte) error {
-	return h.MSet(&KV{key, value})
+	return h.MSet(NewKV(key, value))
 }
 
 func (h *KHash) MSet(kvs ... *KV) error {
@@ -91,7 +95,7 @@ func (h *KHash) MSet(kvs ... *KV) error {
 	})
 }
 
-func (h *KHash) PopRandom(n int, fn func(i int, key, value []byte) bool) error {
+func (h *KHash) PopRandom(n int, fn func(key, value []byte) error) error {
 	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
 		return h.db.PopRandom(txn, h.Prefix(), n, fn)
 	})
