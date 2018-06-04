@@ -2,6 +2,7 @@ package kdb
 
 import (
 	"github.com/dgraph-io/badger"
+	"time"
 )
 
 type KHBatch struct {
@@ -10,30 +11,43 @@ type KHBatch struct {
 }
 
 func (k *KHBatch) Set(key, value []byte) error {
-	return k.MSet(NewKV(k.kh.K(key), value))
+	return k.kh.set(k.txn, key, value)
+}
+
+func (k *KHBatch) SetWithTTL(key, val []byte, dur time.Duration) error {
+	return k.kh.setWithTTL(k.txn, key, val, dur)
 }
 
 func (k *KHBatch) MSet(kvs ... *KV) error {
-	return k.kh.db.mSet(k.txn, KVMap(kvs, func(_ int, kv *KV) *KV {
-		kv.Key = k.kh.K(kv.Key)
-		return kv
-	})...)
+	return k.kh.mSet(k.txn, kvs...)
 }
 
 func (k *KHBatch) Get(key []byte) ([]byte, error) {
-	return k.kh.db.get(k.txn, k.kh.K(key))
+	return k.kh.get(k.txn, key)
 }
 
 func (k *KHBatch) MDel(keys ... []byte) (err error) {
-	return k.kh.db.mDel(k.txn, keys...)
+	return k.kh.hDel(k.txn, keys...)
 }
 
 func (k *KHBatch) Exist(key []byte) (bool, error) {
-	return k.kh.db.exist(k.txn, key)
+	return k.kh.exists(k.txn, key)
 }
 
 func (k *KHBatch) PopRandom(n int, fn func(b *KHBatch, key, value []byte) error) error {
 	return k.kh.db.PopRandom(k.txn, k.kh.Prefix(), n, func(key, value []byte) error {
+		return fn(k, key, value)
+	})
+}
+
+func (k *KHBatch) Pop(fn func(b *KHBatch, key, value []byte) error) error {
+	return k.kh.db.Pop(k.txn, k.kh.Prefix(), func(key, value []byte) error {
+		return fn(k, key, value)
+	})
+}
+
+func (k *KHBatch) PopN(n int, fn func(b *KHBatch, key, value []byte) error) error {
+	return k.kh.db.PopN(k.txn, k.kh.Prefix(), n, func(key, value []byte) error {
 		return fn(k, key, value)
 	})
 }

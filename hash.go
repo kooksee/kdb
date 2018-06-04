@@ -3,6 +3,7 @@ package kdb
 import (
 	"github.com/dgraph-io/badger"
 	"github.com/kooksee/kdb/consts"
+	"time"
 )
 
 type KHash struct {
@@ -54,20 +55,20 @@ func (h *KHash) K(key []byte) []byte {
 
 func (h *KHash) Get(key []byte) (val []byte, err error) {
 	return val, h.db.GetWithTx(func(txn *badger.Txn) error {
-		val, err = h.db.get(txn, key)
+		val, err = h.get(txn, key)
 		return err
 	})
 }
 
 func (h *KHash) Del(keys ... []byte) error {
 	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return (&KHBatch{txn: txn, kh: h}).MDel(keys...)
+		return h.hDel(txn, keys...)
 	})
 }
 
 func (h *KHash) Exist(k []byte) (b bool, err error) {
 	return b, h.db.GetWithTx(func(txn *badger.Txn) error {
-		b, err = (&KHBatch{txn: txn, kh: h}).Exist(k)
+		b, err = h.exists(txn, k)
 		return err
 	})
 }
@@ -86,18 +87,44 @@ func (h *KHash) Len() (l int, err error) {
 }
 
 func (h *KHash) Set(key, value []byte) error {
-	return h.MSet(NewKV(key, value))
+	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
+		return h.set(txn, key, value)
+	})
+}
+
+func (h *KHash) SetWithTTL(key, val []byte, dur time.Duration) error {
+	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
+		return h.setWithTTL(txn, key, val, dur)
+	})
 }
 
 func (h *KHash) MSet(kvs ... *KV) error {
 	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return (&KHBatch{kh: h, txn: txn}).MSet(kvs...)
+		return h.mSet(txn, kvs...)
 	})
 }
 
 func (h *KHash) PopRandom(n int, fn func(key, value []byte) error) error {
 	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
 		return h.db.PopRandom(txn, h.Prefix(), n, fn)
+	})
+}
+
+func (h *KHash) Pop(fn func(key, value []byte) error) error {
+	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
+		return h.db.Pop(txn, h.Prefix(), fn)
+	})
+}
+
+func (h *KHash) PopN(n int, fn func(key, value []byte) error) error {
+	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
+		return h.db.PopN(txn, h.Prefix(), n, fn)
+	})
+}
+
+func (h *KHash) Union(otherName string) error {
+	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
+		return h.union(txn, otherName)
 	})
 }
 

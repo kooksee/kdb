@@ -5,6 +5,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/kooksee/kdb/consts"
 	"regexp"
+	"io"
 )
 
 type KDB struct {
@@ -209,7 +210,7 @@ func (k *KDB) scan(txn *badger.Txn, isReverse bool, start, end []byte, fn func(k
 		}
 	}
 
-	for i := 0; iter.Valid(); iter.Next() {
+	for ; iter.Valid(); iter.Next() {
 
 		k := iter.Item().Key()
 		if !Between(k, start, end) {
@@ -221,11 +222,11 @@ func (k *KDB) scan(txn *badger.Txn, isReverse bool, start, end []byte, fn func(k
 			return err
 		}
 
-		if err := fn(k, v); err != nil {
-			return err
+		err = fn(k, v)
+		if err == io.EOF {
+			break
 		}
-
-		i++
+		return err
 	}
 
 	return nil
@@ -245,8 +246,9 @@ func (k *KDB) PopRandom(txn *badger.Txn, prefix []byte, n int, fn func(key, valu
 	})
 }
 
-func (k *KDB) Pop(txn *badger.Txn, prefix []byte, n int, fn func(key, value []byte) error) error {
+func (k *KDB) Pop(txn *badger.Txn, prefix []byte, fn func(key, value []byte) error) error {
 	return k.ReverseWithPrefix(txn, prefix, func(key, value []byte) error {
+
 		if err := fn(key, value); err != nil {
 			return err
 		}
@@ -254,6 +256,27 @@ func (k *KDB) Pop(txn *badger.Txn, prefix []byte, n int, fn func(key, value []by
 		if err := txn.Delete(append(prefix, key...)); err != nil {
 			return err
 		}
+
+		return nil
+	})
+}
+
+func (k *KDB) PopN(txn *badger.Txn, prefix []byte, n int, fn func(key, value []byte) error) error {
+	return k.ReverseWithPrefix(txn, prefix, func(key, value []byte) error {
+
+		if n < 1 {
+			return io.EOF
+		}
+
+		if err := fn(key, value); err != nil {
+			return err
+		}
+
+		if err := txn.Delete(append(prefix, key...)); err != nil {
+			return err
+		}
+
+		n--
 
 		return nil
 	})
