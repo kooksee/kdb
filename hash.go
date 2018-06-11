@@ -3,7 +3,6 @@ package kdb
 import (
 	"github.com/dgraph-io/badger"
 	"github.com/kooksee/kdb/consts"
-	"time"
 )
 
 type KHash struct {
@@ -13,129 +12,140 @@ type KHash struct {
 	firstKey []byte
 	lastKey  []byte
 
-	db *KDB
+	count int
+	db    *KDB
 }
 
 // NewKHash 初始化khash
-func NewKHash(name string, db *KDB) (*KHash, error) {
+func NewKHash(name string, db *KDB) *KHash {
 	kh := &KHash{name: name, db: db}
 
+	kh.count = db.Len(kh.Prefix())
+
 	if err := db.recordPrefix(kh.Prefix()); err != nil {
-		return nil, err
+		GetLog().Error("recordPrefix error", "err", err.Error())
+		panic("")
 	}
 
-	return kh, nil
+	return kh
 }
 
 // Prefix 前缀
-func (h *KHash) Prefix() []byte {
-	if len(h.prefix) == 0 {
-		h.prefix = []byte(F("%s%s%s%s", consts.KHASH, consts.Separator, h.name, consts.Separator))
+func (k *KHash) Prefix() []byte {
+	if len(k.prefix) == 0 {
+		k.prefix = []byte(F("%s%s%s%s", consts.KHASH, consts.Separator, k.name, consts.Separator))
 	}
-	return h.prefix
+	return k.prefix
 }
 
-func (h *KHash) FirstKey() []byte {
-	if len(h.firstKey) == 0 {
-		h.firstKey = h.Prefix()
+func (k *KHash) FirstKey() []byte {
+	if len(k.firstKey) == 0 {
+		k.firstKey = k.Prefix()
 	}
-	return h.firstKey
+	return k.firstKey
 }
 
-func (h *KHash) LastKey() []byte {
-	if len(h.lastKey) == 0 {
-		h.lastKey = append(h.Prefix(), consts.MAXBYTE)
+func (k *KHash) LastKey() []byte {
+	if len(k.lastKey) == 0 {
+		k.lastKey = append(k.Prefix(), consts.MAXBYTE)
 	}
-	return h.lastKey
+	return k.lastKey
 }
 
-func (h *KHash) K(key []byte) []byte {
-	return append(h.Prefix(), key...)
+func (k *KHash) K(key []byte) []byte {
+	return append(k.Prefix(), key...)
 }
 
-func (h *KHash) Get(key []byte) (val []byte, err error) {
-	return val, h.db.GetWithTx(func(txn *badger.Txn) error {
-		val, err = h.get(txn, key)
+func (k *KHash) Get(key []byte) []byte {
+	var val []byte
+	var err error
+
+	if err := k.db.GetWithTx(func(txn *badger.Txn) error {
+		val, err = k.get(txn, key)
 		return err
+	}); err != nil {
+		GetLog().Error("khash get error", "err", err.Error())
+		return nil
+	}
+
+	return val
+}
+
+func (k *KHash) Del(keys ... []byte) error {
+	return k.db.UpdateWithTx(func(txn *badger.Txn) error {
+		return k.hDel(txn, keys...)
 	})
 }
 
-func (h *KHash) Del(keys ... []byte) error {
-	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return h.hDel(txn, keys...)
-	})
-}
+func (k *KHash) Exist(key []byte) bool {
+	var b bool
+	var err error
 
-func (h *KHash) Exist(k []byte) (b bool, err error) {
-	return b, h.db.GetWithTx(func(txn *badger.Txn) error {
-		b, err = h.exists(txn, k)
+	if err := k.db.GetWithTx(func(txn *badger.Txn) error {
+		b, err = k.exists(txn, key)
 		return err
+	}); err != nil {
+		GetLog().Error("khash exist error", "err", err.Error())
+		return false
+	}
+	return b
+}
+
+func (k *KHash) Drop() error {
+	return k.db.UpdateWithTx(func(txn *badger.Txn) error {
+		k.count = 0
+		return k.db.Drop(txn, k.Prefix())
 	})
 }
 
-func (h *KHash) Drop() error {
-	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return h.db.Drop(txn, h.Prefix())
+func (k *KHash) Len() int {
+	return k.count
+}
+
+func (k *KHash) Set(key, value []byte) error {
+	return k.db.UpdateWithTx(func(txn *badger.Txn) error {
+		return k.set(txn, key, value)
 	})
 }
 
-func (h *KHash) Len() (l int, err error) {
-	return l, h.db.GetWithTx(func(txn *badger.Txn) error {
-		l, err = h.db.Len(txn, h.Prefix())
-		return err
+func (k *KHash) PopRandom(n int, fn func(key, value []byte) error) error {
+	return k.db.UpdateWithTx(func(txn *badger.Txn) error {
+		return k.popRandom(txn, n, fn)
 	})
 }
 
-func (h *KHash) Set(key, value []byte) error {
-	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return h.set(txn, key, value)
+func (k *KHash) Pop(fn func(key, value []byte) error) error {
+	return k.db.UpdateWithTx(func(txn *badger.Txn) error {
+		return k.pop(txn, k.Prefix(), fn)
 	})
 }
 
-func (h *KHash) SetWithTTL(key, val []byte, dur time.Duration) error {
-	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return h.setWithTTL(txn, key, val, dur)
+func (k *KHash) PopN(n int, fn func(key, value []byte) error) error {
+	return k.db.UpdateWithTx(func(txn *badger.Txn) error {
+		return k.popN(txn, k.Prefix(), n, fn)
 	})
 }
 
-func (h *KHash) MSet(kvs ... *KV) error {
-	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return h.mSet(txn, kvs...)
+// Union 合并
+func (k *KHash) Union(otherNames ... string) error {
+	return k.db.UpdateWithTx(func(txn *badger.Txn) error {
+		for _, otherName := range otherNames {
+			if err := k.union(txn, otherName); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
-func (h *KHash) PopRandom(n int, fn func(key, value []byte) error) error {
-	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return h.db.PopRandom(txn, h.Prefix(), n, fn)
+func (k *KHash) BatchView(fn func(*KHBatch) error) error {
+	return k.db.GetWithTx(func(txn *badger.Txn) error {
+		return fn(&KHBatch{kh: k, txn: txn})
 	})
 }
 
-func (h *KHash) Pop(fn func(key, value []byte) error) error {
-	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return h.db.Pop(txn, h.Prefix(), fn)
-	})
-}
-
-func (h *KHash) PopN(n int, fn func(key, value []byte) error) error {
-	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return h.db.PopN(txn, h.Prefix(), n, fn)
-	})
-}
-
-func (h *KHash) Union(otherName string) error {
-	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return h.union(txn, otherName)
-	})
-}
-
-func (h *KHash) BatchView(fn func(*KHBatch) error) error {
-	return h.db.GetWithTx(func(txn *badger.Txn) error {
-		return fn(&KHBatch{kh: h, txn: txn})
-	})
-}
-
-func (h *KHash) BatchUpdate(fn func(k *KHBatch) error) error {
-	return h.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return fn(&KHBatch{kh: h, txn: txn})
+func (k *KHash) BatchUpdate(fn func(k *KHBatch) error) error {
+	return k.db.UpdateWithTx(func(txn *badger.Txn) error {
+		return fn(&KHBatch{kh: k, txn: txn})
 	})
 }

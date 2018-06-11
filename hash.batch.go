@@ -2,7 +2,6 @@ package kdb
 
 import (
 	"github.com/dgraph-io/badger"
-	"time"
 )
 
 type KHBatch struct {
@@ -14,19 +13,11 @@ func (k *KHBatch) Set(key, value []byte) error {
 	return k.kh.set(k.txn, key, value)
 }
 
-func (k *KHBatch) SetWithTTL(key, val []byte, dur time.Duration) error {
-	return k.kh.setWithTTL(k.txn, key, val, dur)
-}
-
-func (k *KHBatch) MSet(kvs ... *KV) error {
-	return k.kh.mSet(k.txn, kvs...)
-}
-
 func (k *KHBatch) Get(key []byte) ([]byte, error) {
 	return k.kh.get(k.txn, key)
 }
 
-func (k *KHBatch) MDel(keys ... []byte) (err error) {
+func (k *KHBatch) MDel(keys ... []byte) error {
 	return k.kh.hDel(k.txn, keys...)
 }
 
@@ -35,19 +26,19 @@ func (k *KHBatch) Exist(key []byte) (bool, error) {
 }
 
 func (k *KHBatch) PopRandom(n int, fn func(b *KHBatch, key, value []byte) error) error {
-	return k.kh.db.PopRandom(k.txn, k.kh.Prefix(), n, func(key, value []byte) error {
+	return k.kh.popRandom(k.txn, n, func(key, value []byte) error {
 		return fn(k, key, value)
 	})
 }
 
 func (k *KHBatch) Pop(fn func(b *KHBatch, key, value []byte) error) error {
-	return k.kh.db.Pop(k.txn, k.kh.Prefix(), func(key, value []byte) error {
+	return k.kh.pop(k.txn, func(key, value []byte) error {
 		return fn(k, key, value)
 	})
 }
 
 func (k *KHBatch) PopN(n int, fn func(b *KHBatch, key, value []byte) error) error {
-	return k.kh.db.PopN(k.txn, k.kh.Prefix(), n, func(key, value []byte) error {
+	return k.kh.popN(k.txn, n, func(key, value []byte) error {
 		return fn(k, key, value)
 	})
 }
@@ -85,12 +76,7 @@ func (k *KHBatch) GetSet(key []byte, otherHash string) (val []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-
-	kh, err := k.kh.db.KHash(otherHash)
-	if err != nil {
-		return nil, err
-	}
-	return val, (&KHBatch{txn: k.txn, kh: kh}).Set(key, val)
+	return val, (&KHBatch{txn: k.txn, kh: k.kh.db.KHash(otherHash)}).Set(key, val)
 }
 
 func (k *KHBatch) Range(fn func(key, value []byte) error) error {
@@ -106,7 +92,7 @@ func (k *KHBatch) Reverse(fn func(key, value []byte) error) error {
 }
 
 func (k *KHBatch) Random(n int, fn func(key, value []byte) error) error {
-	return k.kh.db.ScanRandom(k.txn, k.kh.Prefix(), n, func(key, value []byte) error {
+	return k.kh.scanRandom(k.txn, n, func(key, value []byte) error {
 		return fn(key, value)
 	})
 }

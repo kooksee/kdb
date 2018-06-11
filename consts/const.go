@@ -2,7 +2,6 @@ package consts
 
 import (
 	"math"
-	"github.com/kooksee/kdb"
 )
 
 const (
@@ -22,8 +21,6 @@ const (
 	IterForward  = 0
 	IterBackward = 1
 )
-
-var DbTypePrefix = []byte(kdb.F("%s%s%s%s", DbNamePrefix, Separator, "type", Separator))
 
 // 记录数据名称,同类型名称不能重复
 // db:h:name
