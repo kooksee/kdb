@@ -138,7 +138,7 @@ func (k *KDB) get(txn *badger.Txn, key []byte) ([]byte, error) {
 
 func (k *KDB) recordPrefix(prefix []byte) error {
 	return k.db.Update(func(txn *badger.Txn) error {
-		return txn.Set(append(DbTypePrefix, prefix...), prefix)
+		return txn.Set(append(DbTypePrefix, prefix...), []byte("ok"))
 	})
 }
 
@@ -233,6 +233,36 @@ func (k *KDB) scanIter(txn *badger.Txn, isReverse bool, start, end []byte, value
 	}))
 }
 
+// 扫描全部
+func (k *KDB) scanAll(fn func(key, value []byte) error) error {
+	return k.GetWithTx(func(txn *badger.Txn) error {
+		opt := badger.DefaultIteratorOptions
+
+		iter := txn.NewIterator(opt)
+		defer iter.Close()
+
+		for iter.Rewind(); iter.Valid(); iter.Next() {
+
+			k := iter.Item().Key()
+
+			v, err := iter.Item().Value()
+			if err != nil {
+				return err
+			}
+
+			err = fn(k, v)
+			if err == Stop {
+				break
+			}
+
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // 范围扫描
 func (k *KDB) scan(txn *badger.Txn, isReverse bool, start, end []byte, fn func(key, value []byte) error) error {
 
@@ -272,7 +302,9 @@ func (k *KDB) scan(txn *badger.Txn, isReverse bool, start, end []byte, fn func(k
 		if err == Stop {
 			break
 		}
-		return err
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
