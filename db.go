@@ -14,11 +14,12 @@ var DbTypePrefix = []byte(F("%s%s%s%s", consts.DbNamePrefix, consts.Separator, "
 var HashPrefix = []byte(F("%s%s", consts.KHASH, consts.Separator))
 var Stop = errors.New("STOP")
 
+var l1 log15.Logger
+
 type KDB struct {
 	db *badger.DB
 
 	hmap map[string]*KHash
-	l    log15.Logger
 }
 
 // InitKdb 初始化数据库
@@ -51,24 +52,24 @@ func GetKdb() *KDB {
 	return kdb
 }
 
-func (k *KDB) InitLog(l log15.Logger) {
+func InitLog(l log15.Logger) {
 	if l != nil {
-		k.l = l.New("package", "kdb")
+		l1 = l.New("package", "kdb")
 	} else {
-		k.l = log15.New("package", "kdb")
+		l1 = log15.New("package", "kdb")
 		ll, err := log15.LvlFromString("debug")
 		if err != nil {
 			panic(err.Error())
 		}
-		k.l.SetHandler(log15.LvlFilterHandler(ll, log15.StreamHandler(os.Stdout, log15.TerminalFormat())))
+		l1.SetHandler(log15.LvlFilterHandler(ll, log15.StreamHandler(os.Stdout, log15.TerminalFormat())))
 	}
 }
 
 func GetLog() log15.Logger {
-	if GetKdb().l == nil {
+	if l1 == nil {
 		panic("please init sp2p log")
 	}
-	return GetKdb().l
+	return l1
 }
 
 func (k *KDB) KHashExist(name string) bool {
@@ -116,7 +117,7 @@ func (k *KDB) UpdateWithTx(fn func(txn *badger.Txn) error) error {
 func (k *KDB) exist(txn *badger.Txn, key []byte) (bool, error) {
 	_, err := k.get(txn, key)
 	if err == badger.ErrKeyNotFound {
-		return false, err
+		return false, nil
 	}
 
 	if err != nil {
@@ -146,7 +147,7 @@ func (k *KDB) KHashNames() []string {
 
 	if err := k.db.View(func(txn *badger.Txn) error {
 		return k.RangeWithPrefix(txn, append(DbTypePrefix, HashPrefix...), func(key, value []byte) error {
-			names = append(names, string(bytes.TrimSuffix(key, []byte{consts.Separator})))
+			names = append(names, string(bytes.TrimSuffix(key, []byte(consts.Separator))))
 			return nil
 		})
 	}); err != nil {
@@ -213,10 +214,7 @@ func (k *KDB) ReverseWithPrefix(txn *badger.Txn, prefix []byte, fn func(key, val
 
 func (k *KDB) RangeWithPrefix(txn *badger.Txn, prefix []byte, fn func(key, value []byte) error) error {
 	return k.Range(txn, prefix, append(prefix, consts.MAXBYTE), func(key, value []byte) error {
-		if bytes.HasPrefix(key, prefix) {
-			return fn(bytes.TrimPrefix(key, prefix), value)
-		}
-		return nil
+		return fn(bytes.TrimPrefix(key, prefix), value)
 	})
 }
 
@@ -297,6 +295,8 @@ func (k *KDB) Drop(txn *badger.Txn, prefix ... []byte) error {
 
 // 根据前缀扫描数据数量
 func (k *KDB) Len(prefix []byte) (m int) {
+	GetLog().Debug(string(prefix))
+
 	if err := k.db.View(func(txn *badger.Txn) error {
 		return k.RangeWithPrefix(txn, prefix, func(_, _ []byte) error {
 			m++

@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	Separator = ':'
+	Separator = ":"
 
 	// key字节范围
 	MINBYTE byte = 0
@@ -14,8 +14,7 @@ const (
 	DbNamePrefix = "db"
 
 	// 类型前缀
-	KHASH = 'h'
-	KLIST = 'l'
+	KHASH = "h"
 
 	// 向前(向后)迭代查询
 	IterForward  = 0

@@ -116,13 +116,13 @@ func (k *KHash) PopRandom(n int, fn func(key, value []byte) error) error {
 
 func (k *KHash) Pop(fn func(key, value []byte) error) error {
 	return k.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return k.pop(txn, k.Prefix(), fn)
+		return k.pop(txn, fn)
 	})
 }
 
 func (k *KHash) PopN(n int, fn func(key, value []byte) error) error {
 	return k.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return k.popN(txn, k.Prefix(), n, fn)
+		return k.popN(txn, n, fn)
 	})
 }
 

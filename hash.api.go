@@ -27,11 +27,13 @@ func (k *KHash) set(txn *badger.Txn, key, value []byte) error {
 	k1 := k.K(key)
 	b, err := k.db.exist(txn, k1)
 	if err != nil {
+		GetLog().Error("exist error", "err", err.Error())
 		return err
 	}
 
 	err = k.db.set(txn, k1, value)
 	if err != nil {
+		GetLog().Error("db set error", "err", err.Error())
 		return err
 	}
 
