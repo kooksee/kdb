@@ -4,27 +4,30 @@ import (
 	"bytes"
 	"github.com/dgraph-io/badger"
 	"github.com/kooksee/kdb/consts"
-	"regexp"
 	"os"
 	"github.com/inconshreveable/log15"
 	"errors"
+	"path/filepath"
 )
 
-var DbTypePrefix = []byte(F("%s%s%s%s", consts.DbNamePrefix, consts.Separator, "type", consts.Separator))
-var HashPrefix = []byte(F("%s%s", consts.KHASH, consts.Separator))
+var dbTypePrefix = []byte(F("%s%s%s%s", consts.DbNamePrefix, consts.Separator, "type", consts.Separator))
+var hashPrefix = []byte(F("%s%s", consts.KHASH, consts.Separator))
 var Stop = errors.New("STOP")
 
 var l1 log15.Logger
 
 type KDB struct {
-	db *badger.DB
-
+	db   *badger.DB
 	hmap map[string]*KHash
 }
 
 // InitKdb 初始化数据库
-func InitKdb(path string) {
+func InitKdb(paths ... string) {
 	once.Do(func() {
+		path := filepath.Join("kdata", "db")
+		if len(paths) > 0 {
+			path = paths[0]
+		}
 
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			if err := os.MkdirAll(path, 0755); err != nil {
@@ -52,17 +55,18 @@ func GetKdb() *KDB {
 	return kdb
 }
 
-func InitLog(l log15.Logger) {
-	if l != nil {
-		l1 = l.New("package", "kdb")
-	} else {
-		l1 = log15.New("package", "kdb")
-		ll, err := log15.LvlFromString("debug")
-		if err != nil {
-			panic(err.Error())
-		}
-		l1.SetHandler(log15.LvlFilterHandler(ll, log15.StreamHandler(os.Stdout, log15.TerminalFormat())))
+func InitLog(l ... log15.Logger) {
+	if len(l) > 0 {
+		l1 = l[0].New("module", "kdb")
+		return
 	}
+
+	l1 = log15.New("module", "kdb")
+	ll, err := log15.LvlFromString("debug")
+	if err != nil {
+		panic(Errs("init log error", err.Error()))
+	}
+	l1.SetHandler(log15.LvlFilterHandler(ll, log15.StreamHandler(os.Stdout, log15.TerminalFormat())))
 }
 
 func GetLog() log15.Logger {
@@ -78,11 +82,8 @@ func (k *KDB) KHashExist(name string) bool {
 		b   bool
 	)
 
-	key := append(DbTypePrefix, []byte(F("%s%s%s%s", consts.KHASH, consts.Separator, name, consts.Separator))...)
-	GetLog().Debug("debug", "key", string(key))
-
 	if err := k.db.View(func(txn *badger.Txn) error {
-		b, err = k.exist(txn, key)
+		b, err = k.exist(txn, append(dbTypePrefix, []byte(F("%s%s%s%s", consts.KHASH, consts.Separator, name, consts.Separator))...))
 		return err
 	}); err != nil {
 		GetLog().Error("KHashExist error", "err", err.Error())
@@ -103,14 +104,14 @@ func (k *KDB) Close() error {
 }
 
 func (k *KDB) GetWithTx(fn func(txn *badger.Txn) error) error {
-	return k.db.View(func(txn *badger.Txn) error {
-		return fn(txn)
+	return k.db.View(func(txn1 *badger.Txn) error {
+		return fn(txn1)
 	})
 }
 
 func (k *KDB) UpdateWithTx(fn func(txn *badger.Txn) error) error {
-	return k.db.Update(func(txn *badger.Txn) error {
-		return fn(txn)
+	return k.db.Update(func(txn1 *badger.Txn) error {
+		return fn(txn1)
 	})
 }
 
@@ -138,23 +139,22 @@ func (k *KDB) get(txn *badger.Txn, key []byte) ([]byte, error) {
 
 func (k *KDB) recordPrefix(prefix []byte) error {
 	return k.db.Update(func(txn *badger.Txn) error {
-		return txn.Set(append(DbTypePrefix, prefix...), []byte("ok"))
+		return txn.Set(append(dbTypePrefix, prefix...), []byte("ok"))
 	})
 }
 
-func (k *KDB) KHashNames() []string {
-	names := make([]string, 0)
-
-	if err := k.db.View(func(txn *badger.Txn) error {
-		return k.RangeWithPrefix(txn, append(DbTypePrefix, HashPrefix...), func(key, value []byte) error {
-			names = append(names, string(bytes.TrimSuffix(key, []byte(consts.Separator))))
-			return nil
-		})
-	}); err != nil {
-		GetLog().Error("KHashNames error", "err", err.Error())
-	}
-	return names
-}
+//func (k *KDB) KHashNames() (names []string) {
+//	if err := k.db.View(func(txn *badger.Txn) error {
+//		return k.RangeWithPrefix(txn, append(dbTypePrefix, hashPrefix...), func(key, value []byte) error {
+//			names = append(names, string(bytes.TrimSuffix(key, []byte(consts.Separator))))
+//			return nil
+//		})
+//	}); err != nil {
+//		GetLog().Error("KHashNames error", "err", err.Error())
+//	}
+//
+//	return
+//}
 
 func (k *KDB) set(txn *badger.Txn, key, value []byte) error {
 	return k.mSet(txn, &KV{Key: key, Value: value})
@@ -179,42 +179,34 @@ func (k *KDB) mDel(txn *badger.Txn, ks ... []byte) error {
 }
 
 // 根据key pattern正则表达式匹配扫描
-func (k *KDB) ScanFilter(txn *badger.Txn, prefix []byte, filter func(key, value []byte) bool, fn func(key, value []byte) error) error {
-	return k.RangeWithPrefix(txn, prefix, func(key, value []byte) error {
-		if filter(key, value) {
-			return fn(key, value)
-		}
-		return nil
-	})
-}
+//func (k *KDB) ScanFilter(txn *badger.Txn, prefix []byte, filter func(key, value []byte) bool, fn func(fk, fv []byte) error) error {
+//	return k.RangeWithPrefix(txn, prefix, func(k1, v1 []byte) error {
+//		if filter(k1, v1) {
+//			return fn(k1, v1)
+//		}
+//		return nil
+//	})
+//}
 
 // 根据key pattern正则表达式匹配扫描
-func (k *KDB) ScanPattern(txn *badger.Txn, prefix []byte, pattern string, fn func(key, value []byte) error) error {
-	r, err := regexp.Compile(pattern)
-	if err != nil {
-		return err
-	}
-
-	return k.RangeWithPrefix(txn, prefix, func(key, value []byte) error {
-		if r.Match(key) {
-			return fn(key, value)
-		}
-		return nil
-	})
-}
+//func (k *KDB) ScanPattern(txn *badger.Txn, prefix []byte, pattern string, fn func(key, value []byte) error) error {
+//	r, err := regexp.Compile(pattern)
+//	if err != nil {
+//		return err
+//	}
+//
+//	return k.RangeWithPrefix(txn, prefix, func(k1, v1 []byte) error {
+//		if r.Match(k1) {
+//			return fn(k1, v1)
+//		}
+//		return nil
+//	})
+//}
 
 func (k *KDB) ReverseWithPrefix(txn *badger.Txn, prefix []byte, fn func(key, value []byte) error) error {
-	return k.Reverse(txn, prefix, append(prefix, consts.MAXBYTE), func(key, value []byte) error {
-		if bytes.HasPrefix(key, prefix) {
-			return fn(bytes.TrimPrefix(key, prefix), value)
-		}
-		return nil
-	})
-}
-
-func (k *KDB) RangeWithPrefix(txn *badger.Txn, prefix []byte, fn func(key, value []byte) error) error {
-	return k.Range(txn, prefix, append(prefix, consts.MAXBYTE), func(key, value []byte) error {
-		return fn(bytes.TrimPrefix(key, prefix), value)
+	return k.Reverse(txn, prefix, append(prefix, consts.MAXBYTE), func(k1, v1 []byte) error {
+		k2 := bytes.TrimPrefix(k1, prefix)
+		return fn(k2, v1)
 	})
 }
 
@@ -234,7 +226,7 @@ func (k *KDB) scanIter(txn *badger.Txn, isReverse bool, start, end []byte, value
 }
 
 // 扫描全部
-func (k *KDB) scanAll(fn func(key, value []byte) error) error {
+func (k *KDB) ScanAll(fn func(key, value []byte) error) error {
 	return k.GetWithTx(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
 
@@ -247,6 +239,7 @@ func (k *KDB) scanAll(fn func(key, value []byte) error) error {
 
 			v, err := iter.Item().Value()
 			if err != nil {
+				GetLog().Error("ScanAll error", "err", err.Error())
 				return err
 			}
 
@@ -256,6 +249,7 @@ func (k *KDB) scanAll(fn func(key, value []byte) error) error {
 			}
 
 			if err != nil {
+				GetLog().Error("ScanAll callback error", "err", err.Error())
 				return err
 			}
 		}
@@ -298,6 +292,10 @@ func (k *KDB) scan(txn *badger.Txn, isReverse bool, start, end []byte, fn func(k
 			return err
 		}
 
+		if k == nil || v == nil || len(k) == 0 || len(v) == 0 {
+			break
+		}
+
 		err = fn(k, v)
 		if err == Stop {
 			break
@@ -326,17 +324,16 @@ func (k *KDB) Drop(txn *badger.Txn, prefix ... []byte) error {
 }
 
 // 根据前缀扫描数据数量
-func (k *KDB) Len(prefix []byte) (m int) {
-	GetLog().Debug(string(prefix))
-
-	if err := k.db.View(func(txn *badger.Txn) error {
-		return k.RangeWithPrefix(txn, prefix, func(_, _ []byte) error {
-			m++
-			return nil
-		})
-	}); err != nil {
-		GetLog().Error("Len error", "err", err.Error())
-		return 0
-	}
-	return m
-}
+//func (k *KDB) Len(prefix []byte) (m int) {
+//
+//	if err := k.db.View(func(txn *badger.Txn) error {
+//		return k.RangeWithPrefix(txn, prefix, func(_, _ []byte) error {
+//			m++
+//			return nil
+//		})
+//	}); err != nil {
+//		GetLog().Error("kdb len error", "err", err.Error())
+//	}
+//
+//	return
+//}

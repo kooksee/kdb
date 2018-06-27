@@ -20,7 +20,7 @@ type KHash struct {
 func NewKHash(name string, db *KDB) *KHash {
 	kh := &KHash{name: name, db: db}
 
-	kh.count = db.Len(kh.Prefix())
+	//kh.count = db.Len(kh.Prefix())
 
 	if err := db.recordPrefix(kh.Prefix()); err != nil {
 		GetLog().Error("recordPrefix error", "err", err.Error())
@@ -108,11 +108,11 @@ func (k *KHash) Set(key, value []byte) error {
 	})
 }
 
-func (k *KHash) PopRandom(n int, fn func(key, value []byte) error) error {
-	return k.db.UpdateWithTx(func(txn *badger.Txn) error {
-		return k.popRandom(txn, n, fn)
-	})
-}
+//func (k *KHash) PopRandom(n int, fn func(key, value []byte) error) error {
+//	return k.db.UpdateWithTx(func(txn *badger.Txn) error {
+//		return k.popRandom(txn, n, fn)
+//	})
+//}
 
 func (k *KHash) Pop(fn func(key, value []byte) error) error {
 	return k.db.UpdateWithTx(func(txn *badger.Txn) error {
@@ -126,9 +126,21 @@ func (k *KHash) PopN(n int, fn func(key, value []byte) error) error {
 	})
 }
 
+func (k *KHash) Range(fn func(key, value []byte) error) error {
+	return k.BatchView(func(b *KHBatch) error {
+		return b.Range(fn)
+	})
+}
+
+func (k *KHash) Map(fn func(b *KHBatch, key, value []byte) error) error {
+	return k.BatchUpdate(func(b1 *KHBatch) error {
+		return b1.Map(fn)
+	})
+}
+
 // Union 合并
 func (k *KHash) Union(otherNames ... string) error {
-	return k.db.UpdateWithTx(func(txn *badger.Txn) error {
+	return k.db.db.Update(func(txn *badger.Txn) error {
 		for _, otherName := range otherNames {
 			if err := k.union(txn, otherName); err != nil {
 				return err
@@ -138,14 +150,14 @@ func (k *KHash) Union(otherNames ... string) error {
 	})
 }
 
-func (k *KHash) BatchView(fn func(*KHBatch) error) error {
-	return k.db.GetWithTx(func(txn *badger.Txn) error {
+func (k *KHash) BatchView(fn func(b *KHBatch) error) error {
+	return k.db.db.View(func(txn *badger.Txn) error {
 		return fn(&KHBatch{kh: k, txn: txn})
 	})
 }
 
-func (k *KHash) BatchUpdate(fn func(k *KHBatch) error) error {
-	return k.db.UpdateWithTx(func(txn *badger.Txn) error {
+func (k *KHash) BatchUpdate(fn func(b *KHBatch) error) error {
+	return k.db.db.Update(func(txn *badger.Txn) error {
 		return fn(&KHBatch{kh: k, txn: txn})
 	})
 }

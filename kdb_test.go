@@ -5,11 +5,9 @@ import (
 	"fmt"
 )
 
-const dbpath = "kdata"
-
 func TestKhash(t *testing.T) {
-	InitKdb(dbpath)
-	InitLog(nil)
+	InitKdb()
+	InitLog()
 
 	db := GetKdb()
 
@@ -18,6 +16,12 @@ func TestKhash(t *testing.T) {
 	kh.Set([]byte("dd"), []byte("sddd"))
 	kh.Set([]byte("dd1"), []byte("sddd1"))
 	kh.Set([]byte("dd2"), []byte("sddd2"))
+
+	if err := kh.Map(func(b *KHBatch, key, value []byte) error {
+		return b.Set(append(key, "是谁"...), value)
+	}); err != nil {
+		panic(err.Error())
+	}
 
 	kh.BatchView(func(batch *KHBatch) error {
 		return batch.Range(func(key, value []byte) error {
