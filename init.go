@@ -9,14 +9,6 @@ var (
 	kdb  *KDB
 )
 
-func NewKV(k, v []byte) *KV {
-	return &KV{Key: k, Value: v, Error: nil}
-}
-
-func ErrKV(err error) *KV {
-	return &KV{Error: err}
-}
-
 type KV struct {
 	Key   []byte
 	Value []byte
