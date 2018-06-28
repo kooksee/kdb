@@ -2,12 +2,6 @@
 
 
 [[projects]]
-  name = "github.com/davecgh/go-spew"
-  packages = ["spew"]
-  revision = "346938d642f2ec3594ed81d874461961cd0faa76"
-  version = "v1.1.0"
-
-[[projects]]
   branch = "master"
   name = "github.com/golang/snappy"
   packages = ["."]
@@ -15,12 +9,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/kooksee/kdb"
-  packages = ["consts"]
-  revision = "480b072594354385d66bbccb683a482ee475a435"
-
-[[projects]]
-  branch = "issue128"
   name = "github.com/syndtr/goleveldb"
   packages = [
     "leveldb",
@@ -36,11 +24,11 @@
     "leveldb/table",
     "leveldb/util"
   ]
-  revision = "5b30db931a38c0c4557e89849cfcf2e7a7c0333a"
+  revision = "0d5a0ceb10cf9ab89fdd744cc8c50a83134f6697"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "af71c1e8437883899ed191b5d2bb0996ea1d6c83da2906280f5bb89936a8e9f9"
+  inputs-digest = "b2c2402df0829ebe0aeee67209b7d0cc684f54a0dd2a1ab34f4e8ad8428219eb"
   solver-name = "gps-cdcl"
   solver-version = 1

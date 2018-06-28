@@ -27,10 +27,6 @@
 
 [[constraint]]
   branch = "master"
-  name = "github.com/kooksee/kdb"
-
-[[constraint]]
-  branch = "issue128"
   name = "github.com/syndtr/goleveldb"
 
 [prune]
