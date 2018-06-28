@@ -18,7 +18,7 @@ type KHash struct {
 // NewKHash 初始化khash
 func NewKHash(name string, db *KDB) *KHash {
 	kh := &KHash{name: name, db: db}
-	if px, err := db.recordPrefix(kh.Prefix()); err != nil {
+	if px, err := db.recordPrefix([]byte(name)); err != nil {
 		panic(Errs("NewKHash recordPrefix", err.Error()))
 	} else {
 		kh.prefix = px
@@ -54,7 +54,11 @@ func (k *KHash) Get(key []byte) ([]byte, error) {
 	return k.get(nil, key)
 }
 
-func (k *KHash) Set(kv ... KV) error {
+func (k *KHash) Set(key,value []byte) error {
+	return k.set(nil, KV{Key:key,Value:value})
+}
+
+func (k *KHash) MSet(kv ... KV) error {
 	return k.set(nil, kv...)
 }
 

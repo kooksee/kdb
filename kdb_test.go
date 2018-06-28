@@ -7,31 +7,22 @@ import (
 
 func TestKhash(t *testing.T) {
 	InitKdb()
-	InitLog()
 
 	db := GetKdb()
 
-	kh := db.KHash("hello")
+	k := db.KHash("hello")
+	k.Set([]byte("d"), []byte("f"))
 
-	kh.Set([]byte("dd"), []byte("sddd"))
-	kh.Set([]byte("dd1"), []byte("sddd1"))
-	kh.Set([]byte("dd2"), []byte("sddd2"))
-
-	if err := kh.Map(func(b *KHBatch, key, value []byte) error {
-		return b.Set(append(key, "是谁"...), value)
-	}); err != nil {
-		panic(err.Error())
+	for i := 0; i < 10000; i++ {
+		name := fmt.Sprintf("hello%d", i)
+		fmt.Println(name)
+		k1 := db.KHash(name)
+		k1.Set([]byte("d"), []byte("f"))
 	}
 
-	kh.BatchView(func(batch *KHBatch) error {
-		return batch.Range(func(key, value []byte) error {
-			fmt.Println(string(key), string(value))
-			return nil
-		})
+	db.ScanAll(func(key, value []byte) error {
+		fmt.Println(string(key), string(value))
+		return nil
 	})
 
-	fmt.Println(kh.Len())
-	fmt.Println(string(kh.Get([]byte("dd"))))
-	fmt.Println(string(kh.Get([]byte("dd1"))))
-	fmt.Println(string(kh.Get([]byte("dd2"))))
 }

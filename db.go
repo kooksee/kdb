@@ -132,12 +132,20 @@ func (k *KDB) recordPrefix(prefix []byte) (px []byte, err error) {
 			return nil
 		}
 
-		l, err := k.sizeof(tx, []byte(consts.Prefix))
+		l, err := k.sizeof([]byte(consts.Prefix))
 		if err != err {
 			return err
 		}
 
 		px = append(big.NewInt(int64(l)).Bytes(), consts.DataPrefix...)
+		k.scanWithPrefix(tx, false, consts.PrefixBk, func(key, value []byte) error {
+			px = value
+			if err := k.del(tx, append(consts.PrefixBk, key...), value); err != nil {
+				return err
+			} else {
+				return Stop
+			}
+		})
 		return tx.Put(key, px, nil)
 	}))
 }
@@ -157,7 +165,12 @@ func (k *KDB) set(tx *leveldb.Transaction, kv ... KV) error {
 	for _, i := range kv {
 		b.Put(i.Key, i.Value)
 	}
-	return ErrPipeWithMsg("kdb set error", tx.Write(b, nil))
+
+	if tx != nil {
+		return ErrPipeWithMsg("kdb set error", tx.Write(b, nil))
+	} else {
+		return ErrPipeWithMsg("kdb set error", k.db.Write(b, nil))
+	}
 }
 
 func (k *KDB) exist(tx *leveldb.Transaction, name []byte) (bool, error) {
@@ -176,7 +189,13 @@ func (k *KDB) del(tx *leveldb.Transaction, keys ... []byte) error {
 	for _, k := range keys {
 		b.Delete(k)
 	}
-	return ErrPipeWithMsg(errMsg, tx.Write(b, nil))
+
+	if tx != nil {
+		return ErrPipeWithMsg(errMsg, tx.Write(b, nil))
+	} else {
+		return ErrPipeWithMsg(errMsg, k.db.Write(b, nil))
+	}
+
 }
 
 func (k *KDB) get(tx *leveldb.Transaction, key []byte) ([]byte, error) {
@@ -244,16 +263,17 @@ func (k *KDB) scanWithPrefix(txn *leveldb.Transaction, isReverse bool, prefix []
 
 func (k *KDB) drop(txn *leveldb.Transaction, prefix ... []byte) error {
 	errMsg := "kdb drop error"
-	return ErrPipeWithMsg(errMsg, func() error {
-		for _, name := range prefix {
-			if err := k.scanWithPrefix(txn, false, name, func(key, value []byte) error {
-				return k.del(txn, key)
-			}); err != nil {
-				return err
-			}
+	for _, name := range prefix {
+		err1 := k.scanWithPrefix(txn, false, name, func(key, value []byte) error {
+			return k.del(txn, key)
+		})
+
+		pp, err := k.getPrefix(txn, name)
+		if err := ErrPipeWithMsg(errMsg, err1, err, k.del(txn, consts.WithPrefix(name)), k.set(txn, KV{Key: append(consts.PrefixBk, name...), Value: pp})); err != nil {
+			return err
 		}
-		return nil
-	}())
+	}
+	return nil
 }
 
 // 根据前缀扫描数据数量
