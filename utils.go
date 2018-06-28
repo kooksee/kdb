@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"time"
 	"strings"
+	"github.com/syndtr/goleveldb/leveldb/errors"
 )
 
 func IsFileExist(path string) bool {
@@ -137,7 +138,7 @@ func BMap(m [][]byte, fn func(i int, k []byte) []byte) [][]byte {
 	return m
 }
 
-func KVMap(m []*KV, fn func(int, *KV) *KV) []*KV {
+func KVMap(m []KV, fn func(int, KV) KV) []KV {
 	for i, d := range m {
 		m[i] = fn(i, d)
 	}
@@ -166,4 +167,21 @@ func GenRandom(start int, end int, count int) map[int]bool {
 	}
 
 	return nums
+}
+
+func ErrPipeWithMsg(msg string, errs ...error) error {
+	for _, e := range errs {
+		if e != nil {
+			return errors.New(fmt.Sprintf("%s --> %s", msg, e.Error()))
+		}
+	}
+	return nil
+}
+
+func ErrWithMsg(msg string, errs ...error) error {
+	es := []string{msg}
+	for _, e := range errs {
+		es = append(es, e.Error())
+	}
+	return errors.New(strings.Join(es, "-->"))
 }

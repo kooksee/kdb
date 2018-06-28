@@ -1,135 +1,104 @@
 package kdb
 
 import (
-	"github.com/dgraph-io/badger"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
-func (k *KHash) get(txn *badger.Txn, key []byte) (val []byte, err error) {
-	return k.db.get(txn, k.K(key))
+func (k *KHash) set(txn *leveldb.Transaction, kv ... KV) error {
+	return ErrPipeWithMsg("khash set error", k.db.set(txn, KVMap(kv, func(_ int, kv KV) KV {
+		kv.Key = k.K(kv.Key)
+		return kv
+	})...))
 }
 
-func (k *KHash) hDel(txn *badger.Txn, keys ... []byte) error {
-	for _, key := range keys {
-		if err := k.db.mDel(txn, k.K(key)); err != nil {
-			return err
-		}
-	}
-
-	k.count -= len(keys)
-	return nil
+func (k *KHash) del(txn *leveldb.Transaction, key ... []byte) error {
+	return ErrPipeWithMsg("khash del error", k.db.del(txn, BMap(key, func(_ int, k1 []byte) []byte {
+		return k.K(k1)
+	})...))
 }
 
-func (k *KHash) exists(txn *badger.Txn, key []byte) (b bool, err error) {
-	return k.db.exist(txn, k.K(key))
+func (k *KHash) get(txn *leveldb.Transaction, key []byte) ([]byte, error) {
+	val, err := k.db.get(txn, k.K(key))
+	return val, ErrPipeWithMsg("khash get error", err)
 }
 
-func (k *KHash) set(txn *badger.Txn, key, value []byte) error {
-	k1 := k.K(key)
-
-	b, err := k.db.exist(txn, k1)
-	if err != nil {
-		GetLog().Error("exist error", "err", err.Error())
-		return err
-	}
-
-	if err = k.db.set(txn, k1, value); err != nil {
-		GetLog().Error("db set error", "err", err.Error())
-		return err
-	}
-
-	if !b {
-		k.count++
-	}
-
-	return nil
+func (k *KHash) exist(txn *leveldb.Transaction, key []byte) (bool, error) {
+	val, err := k.db.exist(txn, k.K(key))
+	return val, ErrPipeWithMsg("khash exist error", err)
 }
 
-func (k *KHash) union(txn *badger.Txn, otherName string) error {
-	h1 := k.db.KHash(otherName)
-	return h1.Pop(func(key, value []byte) error {
-		return k.set(txn, key, value)
+func (k *KHash) _map(txn *leveldb.Transaction, fn func(key, value []byte) ([]byte, error))error {
+	return k.db.scanWithPrefix(txn, false, k.Prefix(), func(key, value []byte) error {
+		val, err := fn(key, value)
+		return ErrPipeWithMsg("", err, k.set(txn, KV{Key: key, Value: val}))
 	})
 }
 
-//func (k *KHash) popRandom(txn *badger.Txn, n int, fn func(key, value []byte) error) error {
-//	return k.scanRandom(txn, n, func(k1, v1 []byte) error {
-//		if err := fn(k1, v1); err != nil {
-//			return err
-//		}
-//
-//		if err := k.hDel(txn, k1); err != nil {
-//			return err
-//		}
-//
-//		return nil
-//	})
-//}
-
-func (k *KHash) pop(txn *badger.Txn, fn func(key, value []byte) error) error {
-	return k.db.ReverseWithPrefix(txn, k.Prefix(), func(k1, v1 []byte) error {
-
-		if err := fn(k1, v1); err != nil {
-			return err
+func (k *KHash) union(txn *leveldb.Transaction, others ... []byte) error {
+	return k.db.WithTxn(func(tx *leveldb.Transaction) error {
+		b := &leveldb.Batch{}
+		for _, o := range others {
+			kh, err := k.db.getPrefix(tx, o)
+			if err := ErrPipeWithMsg("khash union range error", err, k.db.scanWithPrefix(txn, false, o, func(key, value []byte) error {
+				b.Put(k.K(key), value)
+				b.Delete(append(kh, key...))
+				return nil
+			})); err != nil {
+				return err
+			}
 		}
-
-		if err := k.hDel(txn, k1); err != nil {
-			return err
-		}
-
-		return nil
+		return ErrPipeWithMsg("khash union error", tx.Write(b, nil))
 	})
 }
 
-func (k *KHash) popN(txn *badger.Txn, n int, fn func(key, value []byte) error) error {
-	return k.db.ReverseWithPrefix(txn, k.Prefix(), func(k1, v1 []byte) error {
+func (k *KHash) getSet(txn *leveldb.Transaction, key, value []byte) (val []byte, err error) {
+	val, err = k.get(txn, key)
+	return val, ErrPipeWithMsg("khash getSet error", err, k.set(txn, KV{Key: key, Value: value}))
+}
 
+func (k *KHash) popRandom(txn *leveldb.Transaction, n int, fn func(key, value []byte) error) error {
+	return k.scanRandom(txn, n, func(k1, v1 []byte) error {
+		return ErrPipeWithMsg("khash popRandom error", fn(k1, v1), k.del(txn, k1))
+	})
+}
+
+func (k *KHash) pop(txn *leveldb.Transaction, fn func(key, value []byte) error) error {
+	return k.db.scanWithPrefix(txn, true, k.Prefix(), func(key, value []byte) error {
+		return ErrPipeWithMsg("khash pop error", fn(key, value), k.del(txn, key))
+	})
+}
+
+func (k *KHash) popN(txn *leveldb.Transaction, n int, fn func(key, value []byte) error) error {
+	return ErrPipeWithMsg("khash popn error", k.pop(txn, func(key, value []byte) error {
 		if n < 1 {
 			return Stop
 		}
-
-		if err := fn(k1, v1); err != nil {
-			return err
-		}
-
-		if err := k.hDel(txn, k1); err != nil {
-			return err
-		}
-
 		n--
-
-		return nil
-	})
+		return fn(key, value)
+	}))
 }
 
 // ScanRandom 根据前缀随机扫描
-//func (k *KHash) scanRandom(txn *badger.Txn, count int, fn func(key, value []byte) error) error {
-//
-//	if k.count < count {
-//		return k.db.RangeWithPrefix(txn, k.Prefix(), fn)
-//	}
-//
-//	m := 0
-//	var err error
-//	rmd := GenRandom(0, k.count, count)
-//	return k.db.RangeWithPrefix(txn, k.Prefix(), func(key, value []byte) error {
-//		if rmd[m] {
-//			err = fn(key, value)
-//		}
-//		m++
-//		return err
-//	})
-//}
+func (k *KHash) scanRandom(txn *leveldb.Transaction, count int, fn func(key, value []byte) error) error {
+	errmsg := "khash scanRandom error"
+	l, err := k.len()
+	if l < count {
+		return ErrPipeWithMsg(errmsg, err, k.db.scanWithPrefix(txn, true, k.Prefix(), fn))
+	}
 
-//func (k *KDB) Len(prefix []byte) (m int) {
-//
-//	if err := k.db.View(func(txn *badger.Txn) error {
-//		return k.RangeWithPrefix(txn, prefix, func(_, _ []byte) error {
-//			m++
-//			return nil
-//		})
-//	}); err != nil {
-//		GetLog().Error("kdb len error", "err", err.Error())
-//	}
-//
-//	return
-//}
+	m := -1
+	rmd := GenRandom(0, l, count)
+	return ErrPipeWithMsg(errmsg, k.db.scanWithPrefix(txn, true, k.Prefix(), func(key, value []byte) error {
+		m++
+		if rmd[m] {
+			err = fn(key, value)
+		}
+		return err
+	}))
+}
+
+func (k *KHash) len() (int, error) {
+	errMsg := "khash len error"
+	l, err := k.db.sizeof(k.Prefix())
+	return l, ErrPipeWithMsg(errMsg, err)
+}
