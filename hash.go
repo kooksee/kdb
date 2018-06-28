@@ -1,7 +1,6 @@
 package kdb
 
 import (
-	"github.com/kooksee/kdb/consts"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -32,20 +31,6 @@ func (k *KHash) Prefix() []byte {
 	return k.prefix
 }
 
-func (k *KHash) MinKey() []byte {
-	if len(k.firstKey) == 0 {
-		k.firstKey = k.Prefix()
-	}
-	return k.firstKey
-}
-
-func (k *KHash) MaxKey() []byte {
-	if len(k.lastKey) == 0 {
-		k.lastKey = append(k.Prefix(), consts.MAXBYTE)
-	}
-	return k.lastKey
-}
-
 func (k *KHash) K(key []byte) []byte {
 	return append(k.Prefix(), key...)
 }
@@ -54,8 +39,8 @@ func (k *KHash) Get(key []byte) ([]byte, error) {
 	return k.get(nil, key)
 }
 
-func (k *KHash) Set(key,value []byte) error {
-	return k.set(nil, KV{Key:key,Value:value})
+func (k *KHash) Set(key, value []byte) error {
+	return k.set(nil, KV{Key: key, Value: value})
 }
 
 func (k *KHash) MSet(kv ... KV) error {

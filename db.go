@@ -1,7 +1,6 @@
 package kdb
 
 import (
-	"github.com/kooksee/kdb/consts"
 	"os"
 	"path/filepath"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -51,7 +50,7 @@ func GetKdb() *KDB {
 }
 
 func (k *KDB) KHashExist(name []byte) (bool, error) {
-	return k.db.Has(append([]byte(consts.Prefix), name...), nil)
+	return k.db.Has(append([]byte(Prefix), name...), nil)
 }
 
 // NewLDBDatabase returns a LevelDB wrapped object.
@@ -110,11 +109,11 @@ func (k *KDB) getPrefix(tx *leveldb.Transaction, prefix []byte) ([]byte, error) 
 	errMsg := "kdb getPrefix error"
 
 	if tx == nil {
-		val, err := k.db.Get(consts.WithPrefix(prefix), nil)
+		val, err := k.db.Get(WithPrefix(prefix), nil)
 		return val, ErrPipeWithMsg(errMsg, err)
 	}
 
-	val, err := tx.Get(consts.WithPrefix(prefix), nil)
+	val, err := tx.Get(WithPrefix(prefix), nil)
 	return val, ErrPipeWithMsg(errMsg, err)
 }
 
@@ -122,7 +121,7 @@ func (k *KDB) getPrefix(tx *leveldb.Transaction, prefix []byte) ([]byte, error) 
 func (k *KDB) recordPrefix(prefix []byte) (px []byte, err error) {
 	errMsg := "kdb recordPrefix error"
 	return px, ErrPipeWithMsg(errMsg, k.WithTxn(func(tx *leveldb.Transaction) error {
-		key := consts.WithPrefix(prefix)
+		key := WithPrefix(prefix)
 		ext, err := tx.Has(key, nil)
 		if err != nil {
 			return err
@@ -132,15 +131,15 @@ func (k *KDB) recordPrefix(prefix []byte) (px []byte, err error) {
 			return nil
 		}
 
-		l, err := k.sizeof([]byte(consts.Prefix))
+		l, err := k.sizeof([]byte(Prefix))
 		if err != err {
 			return err
 		}
 
-		px = append(big.NewInt(int64(l)).Bytes(), consts.DataPrefix...)
-		k.scanWithPrefix(tx, false, consts.PrefixBk, func(key, value []byte) error {
+		px = append(big.NewInt(int64(l)).Bytes(), DataPrefix...)
+		k.scanWithPrefix(tx, false, PrefixBk, func(key, value []byte) error {
 			px = value
-			if err := k.del(tx, append(consts.PrefixBk, key...), value); err != nil {
+			if err := k.del(tx, append(PrefixBk, key...), value); err != nil {
 				return err
 			} else {
 				return Stop
@@ -153,8 +152,8 @@ func (k *KDB) recordPrefix(prefix []byte) (px []byte, err error) {
 func (k *KDB) KHashNames() (names []string, err error) {
 	errMsg := "kdb KHashNames error"
 	return names, ErrPipeWithMsg(errMsg, k.WithTxn(func(tx *leveldb.Transaction) error {
-		return k.scanWithPrefix(tx, false, consts.Prefix, func(key, value []byte) error {
-			names = append(names, string(bytes.TrimSuffix(key, consts.Prefix)))
+		return k.scanWithPrefix(tx, false, Prefix, func(key, value []byte) error {
+			names = append(names, string(bytes.TrimSuffix(key, Prefix)))
 			return nil
 		})
 	}))
@@ -269,7 +268,7 @@ func (k *KDB) drop(txn *leveldb.Transaction, prefix ... []byte) error {
 		})
 
 		pp, err := k.getPrefix(txn, name)
-		if err := ErrPipeWithMsg(errMsg, err1, err, k.del(txn, consts.WithPrefix(name)), k.set(txn, KV{Key: append(consts.PrefixBk, name...), Value: pp})); err != nil {
+		if err := ErrPipeWithMsg(errMsg, err1, err, k.del(txn, WithPrefix(name)), k.set(txn, KV{Key: append(PrefixBk, name...), Value: pp})); err != nil {
 			return err
 		}
 	}

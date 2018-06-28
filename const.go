@@ -1,4 +1,4 @@
-package consts
+package kdb
 
 import "math"
 
