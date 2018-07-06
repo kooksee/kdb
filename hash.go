@@ -5,7 +5,7 @@ import (
 )
 
 type KHash struct {
-	name string
+	name []byte
 
 	prefix   []byte
 	firstKey []byte
@@ -15,9 +15,9 @@ type KHash struct {
 }
 
 // NewKHash 初始化khash
-func NewKHash(name string, db *KDB) *KHash {
+func NewKHash(name []byte, db *KDB) *KHash {
 	kh := &KHash{name: name, db: db}
-	if px, err := db.recordPrefix([]byte(name)); err != nil {
+	if px, err := db.recordPrefix(name); err != nil {
 		panic(Errs("NewKHash recordPrefix", err.Error()))
 	} else {
 		kh.prefix = px

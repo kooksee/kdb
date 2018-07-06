@@ -56,7 +56,7 @@ func F(format string, a ...interface{}) string {
 }
 
 func Errs(errs ... string) string {
-	return strings.Join(errs, "--")
+	return strings.Join(errs, "-->")
 }
 
 // S2b converts string to a byte slice without memory allocation.

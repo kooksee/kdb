@@ -29,14 +29,15 @@ func InitKdb(paths ... string) {
 
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			if err := os.MkdirAll(path, 0755); err != nil {
-				panic(F("Could not create directory %v. %v", path, err))
+				panic(F("could not create directory %s. %s", path, err.Error()))
 			}
 		}
 
 		db, err := leveldb.OpenFile(path, nil)
 		if err != nil {
-			panic(Errs("数据库启动失败", err.Error()))
+			panic(Errs("the db start fail", err.Error()))
 		}
+
 		kdb = &KDB{db: db, hmap: make(map[string]*KHash)}
 	})
 }
@@ -50,7 +51,7 @@ func GetKdb() *KDB {
 }
 
 func (k *KDB) KHashExist(name []byte) (bool, error) {
-	return k.db.Has(append([]byte(Prefix), name...), nil)
+	return k.db.Has(WithPrefix(name), nil)
 }
 
 // NewLDBDatabase returns a LevelDB wrapped object.
@@ -81,11 +82,12 @@ func NewLDBDatabase(file string, cache int, handles int) (*leveldb.DB, error) {
 	return db, nil
 }
 
-func (k *KDB) KHash(name string) *KHash {
-	if _, ok := k.hmap[name]; !ok {
-		k.hmap[name] = NewKHash(name, k)
+func (k *KDB) KHash(name []byte) *KHash {
+	key := string(name)
+	if _, ok := k.hmap[key]; !ok {
+		k.hmap[key] = NewKHash(name, k)
 	}
-	return k.hmap[name]
+	return k.hmap[key]
 }
 
 func (k *KDB) Close() error {
@@ -102,7 +104,7 @@ func (k *KDB) WithTxn(fn func(tx *leveldb.Transaction) error) error {
 		return err
 	}
 
-	return txn.Commit()
+	return ErrPipeWithMsg("WithTxn Error", txn.Commit())
 }
 
 func (k *KDB) getPrefix(tx *leveldb.Transaction, prefix []byte) ([]byte, error) {
@@ -153,7 +155,7 @@ func (k *KDB) KHashNames() (names []string, err error) {
 	errMsg := "kdb KHashNames error"
 	return names, ErrPipeWithMsg(errMsg, k.WithTxn(func(tx *leveldb.Transaction) error {
 		return k.scanWithPrefix(tx, false, Prefix, func(key, value []byte) error {
-			names = append(names, string(bytes.TrimSuffix(key, Prefix)))
+			names = append(names, string(bytes.TrimPrefix(key, Prefix)))
 			return nil
 		})
 	}))
@@ -166,45 +168,42 @@ func (k *KDB) set(tx *leveldb.Transaction, kv ... KV) error {
 	}
 
 	if tx != nil {
-		return ErrPipeWithMsg("kdb set error", tx.Write(b, nil))
+		return ErrPipeWithMsg("kdb set error without tx", tx.Write(b, nil))
 	} else {
-		return ErrPipeWithMsg("kdb set error", k.db.Write(b, nil))
+		return ErrPipeWithMsg("kdb set error with tx", k.db.Write(b, nil))
 	}
 }
 
 func (k *KDB) exist(tx *leveldb.Transaction, name []byte) (bool, error) {
-	errMsg := "kdb exist error"
 	if tx != nil {
 		b, err := tx.Has(name, nil)
-		return b, ErrPipeWithMsg(errMsg, err)
+		return b, ErrPipeWithMsg("kdb exist error without tx", err)
 	}
 	b, err := k.db.Has(name, nil)
-	return b, ErrPipeWithMsg(errMsg, err)
+	return b, ErrPipeWithMsg("kdb exist error with tx", err)
 }
 
 func (k *KDB) del(tx *leveldb.Transaction, keys ... []byte) error {
-	errMsg := "kdb del error"
 	b := &leveldb.Batch{}
 	for _, k := range keys {
 		b.Delete(k)
 	}
 
 	if tx != nil {
-		return ErrPipeWithMsg(errMsg, tx.Write(b, nil))
+		return ErrPipeWithMsg("kdb del error without tx", tx.Write(b, nil))
 	} else {
-		return ErrPipeWithMsg(errMsg, k.db.Write(b, nil))
+		return ErrPipeWithMsg("kdb del error with tx", k.db.Write(b, nil))
 	}
 
 }
 
 func (k *KDB) get(tx *leveldb.Transaction, key []byte) ([]byte, error) {
-	errMsg := "kdb get error"
 	if tx != nil {
 		val, err := tx.Get(key, nil)
-		return val, ErrPipeWithMsg(errMsg, err)
+		return val, ErrPipeWithMsg("kdb get error without tx", err)
 	}
 	val, err := k.db.Get(key, nil)
-	return val, ErrPipeWithMsg(errMsg, err)
+	return val, ErrPipeWithMsg("kdb get error with tx", err)
 }
 
 // 扫描全部

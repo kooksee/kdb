@@ -27,28 +27,30 @@ func (k *KHash) exist(txn *leveldb.Transaction, key []byte) (bool, error) {
 	return val, ErrPipeWithMsg("khash exist error", err)
 }
 
-func (k *KHash) _map(txn *leveldb.Transaction, fn func(key, value []byte) ([]byte, error))error {
+func (k *KHash) _map(txn *leveldb.Transaction, fn func(key, value []byte) ([]byte, error)) error {
 	return k.db.scanWithPrefix(txn, false, k.Prefix(), func(key, value []byte) error {
 		val, err := fn(key, value)
-		return ErrPipeWithMsg("", err, k.set(txn, KV{Key: key, Value: val}))
+		return ErrPipeWithMsg("khash map error", err, k.set(txn, KV{Key: key, Value: val}))
 	})
 }
 
 func (k *KHash) union(txn *leveldb.Transaction, others ... []byte) error {
-	return k.db.WithTxn(func(tx *leveldb.Transaction) error {
-		b := &leveldb.Batch{}
-		for _, o := range others {
-			kh, err := k.db.getPrefix(tx, o)
-			if err := ErrPipeWithMsg("khash union range error", err, k.db.scanWithPrefix(txn, false, o, func(key, value []byte) error {
-				b.Put(k.K(key), value)
-				b.Delete(append(kh, key...))
-				return nil
-			})); err != nil {
-				return err
-			}
+	if txn != nil {
+		panic(Errs("khash union error", "txn is nil"))
+	}
+
+	b := &leveldb.Batch{}
+	for _, o := range others {
+		kh, err := k.db.getPrefix(txn, o)
+		if err := ErrPipeWithMsg("khash union range error", err, k.db.scanWithPrefix(txn, false, o, func(key, value []byte) error {
+			b.Put(k.K(key), value)
+			b.Delete(append(kh, key...))
+			return nil
+		})); err != nil {
+			return err
 		}
-		return ErrPipeWithMsg("khash union error", tx.Write(b, nil))
-	})
+	}
+	return ErrPipeWithMsg("khash union error", txn.Write(b, nil))
 }
 
 func (k *KHash) getSet(txn *leveldb.Transaction, key, value []byte) (val []byte, err error) {
