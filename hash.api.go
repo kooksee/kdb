@@ -2,6 +2,7 @@ package kdb
 
 import (
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/json-iterator/go"
 )
 
 func (k *KHash) set(txn *leveldb.Transaction, kv ... KV) error {
@@ -20,6 +21,11 @@ func (k *KHash) del(txn *leveldb.Transaction, key ... []byte) error {
 func (k *KHash) get(txn *leveldb.Transaction, key []byte) ([]byte, error) {
 	val, err := k.db.get(txn, k.K(key))
 	return val, ErrPipeWithMsg("khash get error", err)
+}
+
+func (k *KHash) getJson(txn *leveldb.Transaction, key []byte, path ...interface{}) (jsoniter.Any, error) {
+	val, err := k.db.get(txn, k.K(key))
+	return json.Get(val, path...), ErrPipeWithMsg("khash getJson error", err)
 }
 
 func (k *KHash) exist(txn *leveldb.Transaction, key []byte) (bool, error) {

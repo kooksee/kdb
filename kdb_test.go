@@ -10,13 +10,13 @@ func TestKhash(t *testing.T) {
 
 	db := GetKdb()
 
-	k := db.KHash("hello")
+	k := db.KHash([]byte("hello"))
 	k.Set([]byte("d"), []byte("f"))
 
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 1000; i++ {
 		name := fmt.Sprintf("hello%d", i)
 		fmt.Println(name)
-		k1 := db.KHash(name)
+		k1 := db.KHash([]byte(name))
 		k1.Set([]byte("d"), []byte("f"))
 	}
 

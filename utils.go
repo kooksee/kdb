@@ -177,11 +177,3 @@ func ErrPipeWithMsg(msg string, errs ...error) error {
 	}
 	return nil
 }
-
-func ErrWithMsg(msg string, errs ...error) error {
-	es := []string{msg}
-	for _, e := range errs {
-		es = append(es, e.Error())
-	}
-	return errors.New(strings.Join(es, "-->"))
-}

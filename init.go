@@ -2,9 +2,11 @@ package kdb
 
 import (
 	"sync"
+	"github.com/json-iterator/go"
 )
 
 var (
+	json = jsoniter.ConfigCompatibleWithStandardLibrary
 	once sync.Once
 	kdb  *KDB
 )
