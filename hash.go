@@ -4,21 +4,23 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-type KHash struct {
+type kHash struct {
+	IKHash
+
 	name []byte
 
 	prefix   []byte
 	firstKey []byte
 	lastKey  []byte
 
-	db *KDB
+	db IKDB
 }
 
-// NewKHash 初始化khash
-func NewKHash(name []byte, db *KDB) *KHash {
-	kh := &KHash{name: name, db: db}
+// newkHash 初始化kHash
+func newkHash(name []byte, db *kDb) *kHash {
+	kh := &kHash{name: name, db: db}
 	if px, err := db.recordPrefix(name); err != nil {
-		panic(Errs("NewKHash recordPrefix", err.Error()))
+		mustNotErr(errWithMsg("NewkHash recordPrefix", err))
 	} else {
 		kh.prefix = px
 	}
@@ -27,73 +29,81 @@ func NewKHash(name []byte, db *KDB) *KHash {
 }
 
 // Prefix 前缀
-func (k *KHash) Prefix() []byte {
+func (k *kHash) getPrefix() []byte {
 	return k.prefix
 }
 
-func (k *KHash) K(key []byte) []byte {
-	return append(k.Prefix(), key...)
+func (k *kHash) k(key []byte) []byte {
+	return append(k.prefix, key...)
 }
 
-func (k *KHash) Get(key []byte) ([]byte, error) {
+func (k *kHash) Get(key []byte) ([]byte, error) {
 	return k.get(nil, key)
 }
 
-func (k *KHash) Set(key, value []byte) error {
+func (k *kHash) Set(key, value []byte) error {
 	return k.set(nil, KV{Key: key, Value: value})
 }
 
-func (k *KHash) MSet(kv ... KV) error {
+func (k *kHash) MSet(kv ... KV) error {
 	return k.set(nil, kv...)
 }
 
-func (k *KHash) Del(key ... []byte) error {
+func (k *kHash) Del(key ... []byte) error {
 	return k.del(nil, key...)
 }
 
-func (k *KHash) Exist(key []byte) (bool, error) {
+func (k *kHash) Exist(key []byte) (bool, error) {
 	return k.exist(nil, key)
 }
 
-func (k *KHash) Drop() error {
-	return k.db.drop(nil, k.Prefix())
+func (k *kHash) Drop() error {
+	return k.db.WithTxn(func(tx *leveldb.Transaction) error {
+		if err := k.db.scanWithPrefix(tx, false, k.getPrefix(), func(key, value []byte) error {
+			return k.del(tx, key)
+		}); err != nil {
+			return err
+		}
+
+		return k.db.saveBk(tx, k.name, k.prefix)
+	})
 }
 
-func (k *KHash) Len() (int, error) {
+func (k *kHash) Len() (int, error) {
 	return k.len()
 }
 
-func (k *KHash) PopRandom(n int, fn func(key, value []byte) error) error {
+func (k *kHash) PopRandom(n int, fn func(key, value []byte) error) error {
 	return k.popRandom(nil, n, fn)
 }
 
-func (k *KHash) Pop(fn func(key, value []byte) error) error {
+func (k *kHash) Pop(fn func(key, value []byte) error) error {
 	return k.pop(nil, fn)
 }
 
-func (k *KHash) PopN(n int, fn func(key, value []byte) error) error {
+func (k *kHash) PopN(n int, fn func(key, value []byte) error) error {
 	return k.popN(nil, n, fn)
 }
 
-func (k *KHash) Range(fn func(key, value []byte) error) error {
-	return k.db.scanWithPrefix(nil, false, k.Prefix(), fn)
+func (k *kHash) Range(fn func(key, value []byte) error) error {
+	return k.db.scanWithPrefix(nil, false, k.getPrefix(), fn)
 }
 
-func (k *KHash) Reverse(fn func(key, value []byte) error) error {
-	return k.db.scanWithPrefix(nil, true, k.Prefix(), fn)
+func (k *kHash) Reverse(fn func(key, value []byte) error) error {
+	return k.db.scanWithPrefix(nil, true, k.getPrefix(), fn)
 }
 
-func (k *KHash) Map(fn func(key, value []byte) ([]byte, error)) error {
+func (k *kHash) Map(fn func(key, value []byte) ([]byte, error)) error {
 	return k._map(nil, fn)
 }
 
 // Union 合并
-func (k *KHash) Union(otherNames ... []byte) error {
+func (k *kHash) Union(otherNames ... []byte) error {
 	return k.union(nil, otherNames...)
 }
 
-func (k *KHash) WithTx(fn func(kh *KHBatch) error) error {
+func (k *kHash) WithTx(fn func(kh IKHBatch) error) error {
 	return k.db.WithTxn(func(tx *leveldb.Transaction) error {
-		return fn(&KHBatch{kh: k, txn: tx})
+		return fn(&kHBatch{kh: k, txn: tx})
 	})
 }

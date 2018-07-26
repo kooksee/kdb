@@ -1,20 +1,11 @@
 package kdb
 
-import "math"
-
 var (
-	Prefix     = []byte("px:")
-	DataPrefix = []byte("@@:")
-	PrefixBk   = []byte("pxb:")
-
-	// key字节范围
-	MINBYTE byte = 0
-	MAXBYTE byte = math.MaxUint8
-
-	StatueOk      = []byte("ok")
-	StatueDeleted = []byte("deleted")
+	prefix     = []byte("px:")
+	dataPrefix = []byte("@@:")
+	prefixBk   = []byte("pxb:")
 )
 
-func WithPrefix(name []byte) []byte {
-	return append(Prefix, name...)
+func withPrefix(name []byte) []byte {
+	return append(prefix, name...)
 }

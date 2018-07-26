@@ -1,14 +1,15 @@
-package kdb
+package tests
 
 import (
 	"testing"
 	"fmt"
+	"github.com/kooksee/kdb"
 )
 
 func TestKhash(t *testing.T) {
-	InitKdb()
-
-	db := GetKdb()
+	cfg := kdb.DefaultConfig()
+	cfg.InitKdb()
+	db := cfg.GetDb()
 
 	k := db.KHash([]byte("hello"))
 	k.Set([]byte("d"), []byte("f"))
