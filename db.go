@@ -55,10 +55,11 @@ func (k *kDb) recordPrefix(prefix []byte) (px []byte, err error) {
 	errMsg := "kdb recordPrefix error"
 	return px, errWithMsg(errMsg, k.withTxn(func(tx *leveldb.Transaction) error {
 		key := withPrefix(prefix)
-		ext, err := tx.Get(key, nil)
+		ext, err := k.get(tx, key)
 		if err != nil {
 			return err
 		}
+
 		// 存在就不再存储
 		if len(ext) != 0 {
 			px = ext
@@ -138,10 +139,17 @@ func (k *kDb) del(tx *leveldb.Transaction, keys ... []byte) error {
 func (k *kDb) get(tx *leveldb.Transaction, key []byte) ([]byte, error) {
 	if tx != nil {
 		val, err := tx.Get(key, nil)
+		if err == leveldb.ErrNotFound {
+			err = nil
+		}
 		return val, errWithMsg("kdb get error", err)
+	} else {
+		val, err := k.db.Get(key, nil)
+		if err == leveldb.ErrNotFound {
+			err = nil
+		}
+		return val, errWithMsg("kdb tx get error", err)
 	}
-	val, err := k.db.Get(key, nil)
-	return val, errWithMsg("kdb tx get error", err)
 }
 
 // 扫描全部
