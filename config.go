@@ -13,7 +13,7 @@ type config struct {
 	db IKDB
 }
 
-// InitkDb 初始化数据库
+// InitKdb 初始化数据库
 func (c *config) InitKdb(paths ... string) {
 	path := filepath.Join("kdata", "db")
 	if len(paths) > 0 {
@@ -36,16 +36,14 @@ func (c *config) getDb() IKDB {
 	return c.db
 }
 
-// GetDb 得到kDb实例
+// GetDb 得到kdb实例
 func (c *config) GetDb() IKDB {
 	return c.getDb()
 }
 
 func DefaultConfig() *config {
 	once.Do(func() {
-		cfg = &config{
-		}
+		cfg = &config{}
 	})
-
 	return cfg
 }
