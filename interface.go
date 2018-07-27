@@ -56,6 +56,8 @@ type IKHash interface {
 	popN(txn *leveldb.Transaction, n int, fn func(key, value []byte) error) error
 	scanRandom(txn *leveldb.Transaction, count int, fn func(key, value []byte) error) error
 	len() (int, error)
+	_range(txn *leveldb.Transaction,fn func(key, value []byte) error) error
+	_reverse(txn *leveldb.Transaction,fn func(key, value []byte) error) error
 }
 
 type IKHBatch interface {

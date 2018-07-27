@@ -86,11 +86,11 @@ func (k *kHash) PopN(n int, fn func(key, value []byte) error) error {
 }
 
 func (k *kHash) Range(fn func(key, value []byte) error) error {
-	return k.db.scanWithPrefix(nil, false, k.getPrefix(), fn)
+	return k._range(fn)
 }
 
 func (k *kHash) Reverse(fn func(key, value []byte) error) error {
-	return k.db.scanWithPrefix(nil, true, k.getPrefix(), fn)
+	return k._range(fn)
 }
 
 func (k *kHash) Map(fn func(key, value []byte) ([]byte, error)) error {

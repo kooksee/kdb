@@ -48,11 +48,11 @@ func (k *kHBatch) GetSet(key, value []byte) (val []byte, err error) {
 }
 
 func (k *kHBatch) Range(fn func(key, value []byte) error) error {
-	return k.kh.scanWithPrefix(k.txn, false, k.kh.getPrefix(), fn)
+	return k.kh._range(k.txn, fn)
 }
 
 func (k *kHBatch) Reverse(fn func(key, value []byte) error) error {
-	return k.kh.scanWithPrefix(k.txn, true, k.kh.getPrefix(), fn)
+	return k.kh._range(k.txn, fn)
 }
 
 func (k *kHBatch) Random(n int, fn func(key, value []byte) error) error {

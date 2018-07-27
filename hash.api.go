@@ -111,3 +111,11 @@ func (k *kHash) len() (int, error) {
 	l, err := k.db.sizeof(k.getPrefix())
 	return l, errWithMsg(errMsg, err)
 }
+
+func (k *kHash) _range(txn *leveldb.Transaction, fn func(key, value []byte) error) error {
+	return k.db.scanWithPrefix(nil, false, k.getPrefix(), fn)
+}
+
+func (k *kHash) _reverse(txn *leveldb.Transaction, fn func(key, value []byte) error) error {
+	return k.db.scanWithPrefix(nil, true, k.getPrefix(), fn)
+}

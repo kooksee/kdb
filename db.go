@@ -44,12 +44,13 @@ func (k *kDb) WithTxn(fn func(tx *leveldb.Transaction) error) error {
 	return errWithMsg("WithTxn Error", txn.Commit())
 }
 
+// getPrefix 获得真正的前缀
 func (k *kDb) getPrefix(tx *leveldb.Transaction, prefix []byte) ([]byte, error) {
 	val, err := k.get(tx, withPrefix(prefix))
 	return val, errWithMsg("kdb getPrefix error", err)
 }
 
-// 存储并得到前缀
+// recordPrefix 存储并得到前缀
 func (k *kDb) recordPrefix(prefix []byte) (px []byte, err error) {
 	errMsg := "kdb recordPrefix error"
 	return px, errWithMsg(errMsg, k.WithTxn(func(tx *leveldb.Transaction) error {
@@ -82,10 +83,12 @@ func (k *kDb) recordPrefix(prefix []byte) (px []byte, err error) {
 	}))
 }
 
+// saveBk 把前缀存储的备份区
 func (k *kDb) saveBk(tx *leveldb.Transaction, key, value []byte) error {
 	return k.set(tx, KV{Key: append(prefixBk, key...), Value: value})
 }
 
+// KHashNames 获得所有的khash名字
 func (k *kDb) KHashNames() (names []string, err error) {
 	errMsg := "kDb KHashNames error"
 	return names, errWithMsg(errMsg, k.WithTxn(func(tx *leveldb.Transaction) error {

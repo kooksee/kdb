@@ -7,7 +7,6 @@ import (
 
 var (
 	json = jsoniter.ConfigCompatibleWithStandardLibrary
-
 )
 
 type KV struct {
@@ -30,10 +29,9 @@ func kvMap(m []KV, fn func(int, KV) KV) []KV {
 	return m
 }
 
-
-var errs = cmn.Err
-var errWithMsg = cmn.ErrWithMsg
-var mustNotErr = cmn.MustNotErr
-var genRandom = cmn.GenRandom
+var errs = cmn.Err.Err
+var errWithMsg = cmn.Err.ErrWithMsg
+var mustNotErr = cmn.Err.MustNotErr
+var genRandom = cmn.Rand.GenRandom
 var bMap = cmn.BMap
-var ensureDir=cmn.EnsureDir
+var ensureDir = cmn.OS.EnsureDir
