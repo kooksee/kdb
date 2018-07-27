@@ -9,10 +9,10 @@ type IKDB interface {
 	KHashExist(name []byte) (bool, error)
 	KHash(name []byte) IKHash
 	Close() error
-	WithTxn(fn func(tx *leveldb.Transaction) error) error
 	KHashNames() (names []string, err error)
 	ScanAll(fn func(key, value []byte) error) error
 
+	withTxn(fn func(tx *leveldb.Transaction) error) error
 	sizeof(prefix []byte) (m int, err error)
 	saveBk(tx *leveldb.Transaction, key, value []byte) error
 	recordPrefix(prefix []byte) (px []byte, err error)
@@ -39,7 +39,7 @@ type IKHash interface {
 	Reverse(fn func(key, value []byte) error) error
 	Map(fn func(key, value []byte) ([]byte, error)) error
 	Union(otherNames ... []byte) error
-	WithTx(fn func(kh IKHBatch) error) error
+	WithBatch(fn func(b IKHBatch) error) error
 
 	getPrefix() []byte
 	k(key []byte) []byte
@@ -56,8 +56,8 @@ type IKHash interface {
 	popN(txn *leveldb.Transaction, n int, fn func(key, value []byte) error) error
 	scanRandom(txn *leveldb.Transaction, count int, fn func(key, value []byte) error) error
 	len() (int, error)
-	_range(txn *leveldb.Transaction,fn func(key, value []byte) error) error
-	_reverse(txn *leveldb.Transaction,fn func(key, value []byte) error) error
+	_range(txn *leveldb.Transaction, fn func(key, value []byte) error) error
+	_reverse(txn *leveldb.Transaction, fn func(key, value []byte) error) error
 }
 
 type IKHBatch interface {

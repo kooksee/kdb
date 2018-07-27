@@ -58,7 +58,7 @@ func (k *kHash) Exist(key []byte) (bool, error) {
 }
 
 func (k *kHash) Drop() error {
-	return k.db.WithTxn(func(tx *leveldb.Transaction) error {
+	return k.db.withTxn(func(tx *leveldb.Transaction) error {
 		if err := k.db.scanWithPrefix(tx, false, k.getPrefix(), func(key, value []byte) error {
 			return k.del(tx, key)
 		}); err != nil {
@@ -86,11 +86,11 @@ func (k *kHash) PopN(n int, fn func(key, value []byte) error) error {
 }
 
 func (k *kHash) Range(fn func(key, value []byte) error) error {
-	return k._range(fn)
+	return k._range(nil, fn)
 }
 
 func (k *kHash) Reverse(fn func(key, value []byte) error) error {
-	return k._range(fn)
+	return k._range(nil, fn)
 }
 
 func (k *kHash) Map(fn func(key, value []byte) ([]byte, error)) error {
@@ -102,8 +102,8 @@ func (k *kHash) Union(otherNames ... []byte) error {
 	return k.union(nil, otherNames...)
 }
 
-func (k *kHash) WithTx(fn func(kh IKHBatch) error) error {
-	return k.db.WithTxn(func(tx *leveldb.Transaction) error {
+func (k *kHash) WithBatch(fn func(kh IKHBatch) error) error {
+	return k.db.withTxn(func(tx *leveldb.Transaction) error {
 		return fn(&kHBatch{kh: k, txn: tx})
 	})
 }

@@ -31,7 +31,7 @@ func (k *kDb) Close() error {
 	return k.db.Close()
 }
 
-func (k *kDb) WithTxn(fn func(tx *leveldb.Transaction) error) error {
+func (k *kDb) withTxn(fn func(tx *leveldb.Transaction) error) error {
 	txn, err := k.db.OpenTransaction()
 	if err != nil {
 		return errWithMsg("WithTxn OpenTransaction Error", err)
@@ -53,7 +53,7 @@ func (k *kDb) getPrefix(tx *leveldb.Transaction, prefix []byte) ([]byte, error) 
 // recordPrefix 存储并得到前缀
 func (k *kDb) recordPrefix(prefix []byte) (px []byte, err error) {
 	errMsg := "kdb recordPrefix error"
-	return px, errWithMsg(errMsg, k.WithTxn(func(tx *leveldb.Transaction) error {
+	return px, errWithMsg(errMsg, k.withTxn(func(tx *leveldb.Transaction) error {
 		key := withPrefix(prefix)
 		ext, err := tx.Get(key, nil)
 		if err != nil {
@@ -91,7 +91,7 @@ func (k *kDb) saveBk(tx *leveldb.Transaction, key, value []byte) error {
 // KHashNames 获得所有的khash名字
 func (k *kDb) KHashNames() (names []string, err error) {
 	errMsg := "kDb KHashNames error"
-	return names, errWithMsg(errMsg, k.WithTxn(func(tx *leveldb.Transaction) error {
+	return names, errWithMsg(errMsg, k.withTxn(func(tx *leveldb.Transaction) error {
 		return k.scanWithPrefix(tx, false, prefix, func(key, value []byte) error {
 			names = append(names, string(bytes.TrimPrefix(key, prefix)))
 			return nil
