@@ -33,15 +33,7 @@ func (k *kDb) Close() error {
 
 func (k *kDb) withTxn(fn func(tx *leveldb.Transaction) error) error {
 	txn, err := k.db.OpenTransaction()
-	if err != nil {
-		return errWithMsg("WithTxn OpenTransaction Error", err)
-	}
-
-	if err := fn(txn); err != nil {
-		return errWithMsg("WithTxn fn Error", err)
-	}
-
-	return errWithMsg("WithTxn Error", txn.Commit())
+	return errWithMsg("kdb withTxn error", err, errCurry(fn, txn), errCurry(txn.Commit))
 }
 
 // getPrefix 获得真正的前缀
@@ -106,11 +98,11 @@ func (k *kDb) set(tx *leveldb.Transaction, kv ... KV) error {
 		b.Put(i.Key, i.Value)
 	}
 
-	if tx != nil {
-		return errWithMsg("kdb tx Batch set error", tx.Write(b, nil))
-	} else {
-		return errWithMsg("kdb set error", k.db.Write(b, nil))
-	}
+	return errIf(
+		tx != nil,
+		errWithMsg("kdb tx Batch set error", tx.Write(b, nil)),
+		errWithMsg("kdb set error", k.db.Write(b, nil)),
+	)
 }
 
 func (k *kDb) exist(tx *leveldb.Transaction, name []byte) (bool, error) {
@@ -128,12 +120,11 @@ func (k *kDb) del(tx *leveldb.Transaction, keys ... []byte) error {
 		b.Delete(k)
 	}
 
-	if tx != nil {
-		return errWithMsg("kdb tx del error", tx.Write(b, nil))
-	} else {
-		return errWithMsg("kdb del error", k.db.Write(b, nil))
-	}
-
+	return errIf(
+		tx != nil,
+		errWithMsg("kdb tx del error", tx.Write(b, nil)),
+		errWithMsg("kdb del error", k.db.Write(b, nil)),
+	)
 }
 
 func (k *kDb) get(tx *leveldb.Transaction, key []byte) ([]byte, error) {

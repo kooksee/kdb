@@ -1,12 +1,7 @@
 package kdb
 
 import (
-	"github.com/json-iterator/go"
 	"github.com/kooksee/cmn"
-)
-
-var (
-	json = jsoniter.ConfigCompatibleWithStandardLibrary
 )
 
 type KV struct {
@@ -29,9 +24,12 @@ func kvMap(m []KV, fn func(int, KV) KV) []KV {
 	return m
 }
 
-var errs = cmn.Err.Err
+var errIf = cmn.Err.If
+var errCurry = cmn.Err.Curry
 var errWithMsg = cmn.Err.ErrWithMsg
 var mustNotErr = cmn.Err.MustNotErr
 var genRandom = cmn.Rand.GenRandom
 var bMap = cmn.BMap
 var ensureDir = cmn.OS.EnsureDir
+var jsonGet = cmn.Json.Get
+

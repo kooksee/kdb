@@ -26,7 +26,7 @@ func (k *kHash) get(txn *leveldb.Transaction, key []byte) ([]byte, error) {
 
 func (k *kHash) getJson(txn *leveldb.Transaction, key []byte, path ...interface{}) (jsoniter.Any, error) {
 	val, err := k.db.get(txn, k.k(key))
-	return json.Get(val, path...), errWithMsg("kHash getJson error", err)
+	return jsonGet(val, path...), errWithMsg("kHash getJson error", err)
 }
 
 func (k *kHash) exist(txn *leveldb.Transaction, key []byte) (bool, error) {
@@ -43,7 +43,7 @@ func (k *kHash) _map(txn *leveldb.Transaction, fn func(key, value []byte) ([]byt
 
 func (k *kHash) union(txn *leveldb.Transaction, others ... []byte) error {
 	if txn != nil {
-		mustNotErr(errs("kHash union error txn is nil"))
+		mustNotErr("kHash union error txn is nil")
 	}
 
 	b := &leveldb.Batch{}
@@ -92,7 +92,7 @@ func (k *kHash) scanRandom(txn *leveldb.Transaction, count int, fn func(key, val
 	errmsg := "kHash scanRandom error"
 	l, err := k.len()
 	if l < count {
-		return errWithMsg(errmsg, err, k.db.scanWithPrefix(txn, true, k.getPrefix(), fn))
+		return errWithMsg(errmsg, err, errCurry(k.db.scanWithPrefix, txn, true, k.getPrefix(), fn))
 	}
 
 	m := -1

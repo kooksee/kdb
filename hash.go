@@ -20,7 +20,7 @@ type kHash struct {
 func newkHash(name []byte, db *kDb) *kHash {
 	kh := &kHash{name: name, db: db}
 	if px, err := db.recordPrefix(name); err != nil {
-		mustNotErr(errWithMsg("NewkHash recordPrefix", err))
+		mustNotErr("NewkHash recordPrefix", err)
 	} else {
 		kh.prefix = px
 	}
@@ -59,13 +59,13 @@ func (k *kHash) Exist(key []byte) (bool, error) {
 
 func (k *kHash) Drop() error {
 	return k.db.withTxn(func(tx *leveldb.Transaction) error {
-		if err := k.db.scanWithPrefix(tx, false, k.getPrefix(), func(key, value []byte) error {
-			return k.del(tx, key)
-		}); err != nil {
-			return err
-		}
-
-		return k.db.saveBk(tx, k.name, k.prefix)
+		return errWithMsg(
+			"khash.Drop error",
+			errCurry(k.db.scanWithPrefix, tx, false, k.getPrefix(), func(key, value []byte) error {
+				return k.del(tx, key)
+			}),
+			errCurry(k.db.saveBk, tx, k.name, k.prefix),
+		)
 	})
 }
 

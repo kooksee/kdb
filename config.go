@@ -20,10 +20,10 @@ func (c *config) InitKdb(paths ... string) {
 		path = paths[0]
 	}
 
-	mustNotErr(ensureDir(path, 0755))
+	mustNotErr("kdb.config.InitKdb", ensureDir(path, 0755))
 
 	db, err := leveldb.OpenFile(path, nil)
-	mustNotErr(errWithMsg("the db start fail", err))
+	mustNotErr("kdb.config.InitKdb,the db start fail", err)
 
 	c.db = &kDb{db: db, hmap: make(map[string]IKHash)}
 }
