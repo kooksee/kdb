@@ -92,17 +92,20 @@ func (k *kDb) KHashNames() (names []string, err error) {
 	}))
 }
 
+func (k *kDb) write(tx *leveldb.Transaction, b *leveldb.Batch) error {
+	if tx != nil {
+		return tx.Write(b, nil)
+	} else {
+		return k.db.Write(b, nil)
+	}
+}
+
 func (k *kDb) set(tx *leveldb.Transaction, kv ... KV) error {
 	b := &leveldb.Batch{}
 	for _, i := range kv {
 		b.Put(i.Key, i.Value)
 	}
-
-	return errIf(
-		tx != nil,
-		errWithMsg("kdb tx Batch set error", tx.Write(b, nil)),
-		errWithMsg("kdb set error", k.db.Write(b, nil)),
-	)
+	return errWithMsg("kdb.set error", k.write(tx, b))
 }
 
 func (k *kDb) exist(tx *leveldb.Transaction, name []byte) (bool, error) {
@@ -119,12 +122,7 @@ func (k *kDb) del(tx *leveldb.Transaction, keys ... []byte) error {
 	for _, k := range keys {
 		b.Delete(k)
 	}
-
-	return errIf(
-		tx != nil,
-		errWithMsg("kdb tx del error", tx.Write(b, nil)),
-		errWithMsg("kdb del error", k.db.Write(b, nil)),
-	)
+	return errWithMsg("kdb.del error", k.write(tx, b))
 }
 
 func (k *kDb) get(tx *leveldb.Transaction, key []byte) ([]byte, error) {
