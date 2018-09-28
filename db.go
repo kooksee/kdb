@@ -6,17 +6,40 @@ import (
 	"math/big"
 	"bytes"
 	"io"
+	"sync/atomic"
 )
 
 type kDb struct {
 	IKDB
 
 	db   *leveldb.DB
-	hmap map[string]IKHash
+	hmap map[string]*kHash
+
+	khashSize int64
 }
 
-func (k *kDb) KHashExist(name []byte) (bool, error) {
-	return k.db.Has(withPrefix(name), nil)
+// 保存khash的数量
+func (k *kDb) khashSizeSave(tx *leveldb.Transaction) error {
+	atomic.AddInt64(&k.khashSize, 1)
+	return errWithMsg(
+		"khashSizeSave error",
+		tx.Put(khashSizePrefix, big.NewInt(int64(k.khashSize)).Bytes(), nil),
+	)
+}
+
+// 加载khash数量
+func (k *kDb) khashSizeLoad() {
+	dt, err := k.get(nil, khashSizePrefix)
+	mustNotErr("khashSizeLoad", err)
+	k.khashSize = big.NewInt(0).SetBytes(dt).Int64()
+}
+
+func (k *kDb) KHashExist(name []byte) bool {
+	dt, err := k.db.Has(withPrefix(name), nil)
+	if err != nil {
+		return false
+	}
+	return dt
 }
 
 func (k *kDb) KHash(name []byte) IKHash {
@@ -45,48 +68,36 @@ func (k *kDb) getPrefix(tx *leveldb.Transaction, prefix []byte) ([]byte, error) 
 // recordPrefix 存储并得到前缀
 func (k *kDb) recordPrefix(prefix []byte) (px []byte, err error) {
 	errMsg := "kdb recordPrefix error"
-	return px, errWithMsg(errMsg, k.withTxn(func(tx *leveldb.Transaction) error {
+	return px, k.withTxn(func(tx *leveldb.Transaction) error {
 		key := withPrefix(prefix)
+
 		ext, err := k.get(tx, key)
 		if err != nil {
 			return err
 		}
 
 		// 存在就不再存储
-		if len(ext) != 0 {
+		if ext != nil {
 			px = ext
 			return nil
 		}
 
-		l, err := k.sizeof([]byte(prefix))
-		if err != err {
-			return err
-		}
-
-		px = append(big.NewInt(int64(l)).Bytes(), dataPrefix...)
-		k.scanWithPrefix(tx, false, prefixBk, func(key, value []byte) error {
-			px = value
-			if err := k.del(tx, append(prefixBk, key...), value); err != nil {
-				return err
-			} else {
-				return io.EOF
-			}
-		})
-		return tx.Put(key, px, nil)
-	}))
-}
-
-// saveBk 把前缀存储的备份区
-func (k *kDb) saveBk(tx *leveldb.Transaction, key, value []byte) error {
-	return k.set(tx, KV{Key: append(prefixBk, key...), Value: value})
+		px = append(big.NewInt(int64(k.khashSize + 1)).Bytes(), dataPrefix...)
+		return errWithMsg(
+			errMsg,
+			errCurry(k.set, tx, KV{Key: key, Value: px}),
+			errCurry(k.khashSizeSave, tx),
+		)
+	})
 }
 
 // KHashNames 获得所有的khash名字
-func (k *kDb) KHashNames() (names []string, err error) {
+func (k *kDb) KHashNames() (names chan string, err error) {
 	errMsg := "kDb KHashNames error"
+	names = make(chan string, 1000)
 	return names, errWithMsg(errMsg, k.withTxn(func(tx *leveldb.Transaction) error {
 		return k.scanWithPrefix(tx, false, prefix, func(key, value []byte) error {
-			names = append(names, string(bytes.TrimPrefix(key, prefix)))
+			names <- string(bytes.TrimPrefix(key, prefix))
 			return nil
 		})
 	}))
@@ -132,22 +143,20 @@ func (k *kDb) get(tx *leveldb.Transaction, key []byte) ([]byte, error) {
 			err = nil
 		}
 		return val, errWithMsg("kdb get error", err)
-	} else {
-		val, err := k.db.Get(key, nil)
-		if err == leveldb.ErrNotFound {
-			err = nil
-		}
-		return val, errWithMsg("kdb tx get error", err)
 	}
+
+	val, err := k.db.Get(key, nil)
+	if err == leveldb.ErrNotFound {
+		err = nil
+	}
+	return val, errWithMsg("kdb tx get error", err)
 }
 
 // 扫描全部
-func (k *kDb) ScanAll(fn func(key, value []byte) error) error {
+func (k *kDb) ScanAll(fn func(key, value []byte)) error {
 	iter := k.db.NewIterator(nil, nil)
-	for iter.First(); iter.Next(); {
-		if err := fn(iter.Key(), iter.Value()); err != nil {
-			return err
-		}
+	for iter.Next() {
+		fn(iter.Key(), iter.Value())
 	}
 	iter.Release()
 	return iter.Error()

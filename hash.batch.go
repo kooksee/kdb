@@ -5,9 +5,8 @@ import (
 )
 
 type kHBatch struct {
-	IKHBatch
 
-	kh  IKHash
+	kh  *kHash
 	txn *leveldb.Transaction
 }
 

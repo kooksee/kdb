@@ -1,8 +1,6 @@
 package kdb
 
-import (
-	"github.com/kooksee/cmn"
-)
+import "github.com/kooksee/cmn"
 
 type KV struct {
 	Key   []byte
@@ -24,6 +22,7 @@ func kvMap(m []KV, fn func(int, KV) KV) []KV {
 	return m
 }
 
+
 var errIf = cmn.Err.If
 var errCurry = cmn.Err.Curry
 var errWithMsg = cmn.Err.ErrWithMsg
@@ -32,4 +31,3 @@ var genRandom = cmn.Rand.GenRandom
 var bMap = cmn.BMap
 var ensureDir = cmn.OS.EnsureDir
 var jsonGet = cmn.Json.Get
-

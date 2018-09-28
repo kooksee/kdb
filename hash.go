@@ -13,14 +13,14 @@ type kHash struct {
 	firstKey []byte
 	lastKey  []byte
 
-	db IKDB
+	db *kDb
 }
 
 // newkHash 初始化kHash
 func newkHash(name []byte, db *kDb) *kHash {
 	kh := &kHash{name: name, db: db}
 	if px, err := db.recordPrefix(name); err != nil {
-		mustNotErr("NewkHash recordPrefix", err)
+		mustNotErr("NewkHash.recordPrefix", err)
 	} else {
 		kh.prefix = px
 	}
@@ -64,7 +64,6 @@ func (k *kHash) Drop() error {
 			errCurry(k.db.scanWithPrefix, tx, false, k.getPrefix(), func(key, value []byte) error {
 				return k.del(tx, key)
 			}),
-			errCurry(k.db.saveBk, tx, k.name, k.prefix),
 		)
 	})
 }
@@ -90,7 +89,7 @@ func (k *kHash) Range(fn func(key, value []byte) error) error {
 }
 
 func (k *kHash) Reverse(fn func(key, value []byte) error) error {
-	return k._range(nil, fn)
+	return k._reverse(nil, fn)
 }
 
 func (k *kHash) Map(fn func(key, value []byte) ([]byte, error)) error {

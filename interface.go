@@ -1,27 +1,11 @@
 package kdb
 
-import (
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/json-iterator/go"
-)
-
 type IKDB interface {
 	KHashExist(name []byte) (bool, error)
 	KHash(name []byte) IKHash
 	Close() error
-	KHashNames() (names []string, err error)
-	ScanAll(fn func(key, value []byte) error) error
-
-	withTxn(fn func(tx *leveldb.Transaction) error) error
-	sizeof(prefix []byte) (m int, err error)
-	saveBk(tx *leveldb.Transaction, key, value []byte) error
-	recordPrefix(prefix []byte) (px []byte, err error)
-	getPrefix(tx *leveldb.Transaction, prefix []byte) ([]byte, error)
-	set(tx *leveldb.Transaction, kv ... KV) error
-	exist(tx *leveldb.Transaction, name []byte) (bool, error)
-	del(tx *leveldb.Transaction, keys ... []byte) error
-	get(tx *leveldb.Transaction, key []byte) ([]byte, error)
-	scanWithPrefix(txn *leveldb.Transaction, isReverse bool, prefix []byte, fn func(key, value []byte) error) error
+	KHashNames() (names chan string, err error)
+	ScanAll(fn func(key, value []byte)) error
 }
 
 type IKHash interface {
@@ -40,24 +24,6 @@ type IKHash interface {
 	Map(fn func(key, value []byte) ([]byte, error)) error
 	Union(otherNames ... []byte) error
 	WithBatch(fn func(b IKHBatch) error) error
-
-	getPrefix() []byte
-	k(key []byte) []byte
-	set(txn *leveldb.Transaction, kv ... KV) error
-	del(txn *leveldb.Transaction, key ... []byte) error
-	get(txn *leveldb.Transaction, key []byte) ([]byte, error)
-	getJson(txn *leveldb.Transaction, key []byte, path ...interface{}) (jsoniter.Any, error)
-	exist(txn *leveldb.Transaction, key []byte) (bool, error)
-	_map(txn *leveldb.Transaction, fn func(key, value []byte) ([]byte, error)) error
-	union(txn *leveldb.Transaction, others ... []byte) error
-	getSet(txn *leveldb.Transaction, key, value []byte) (val []byte, err error)
-	popRandom(txn *leveldb.Transaction, n int, fn func(key, value []byte) error) error
-	pop(txn *leveldb.Transaction, fn func(key, value []byte) error) error
-	popN(txn *leveldb.Transaction, n int, fn func(key, value []byte) error) error
-	scanRandom(txn *leveldb.Transaction, count int, fn func(key, value []byte) error) error
-	len() (int, error)
-	_range(txn *leveldb.Transaction, fn func(key, value []byte) error) error
-	_reverse(txn *leveldb.Transaction, fn func(key, value []byte) error) error
 }
 
 type IKHBatch interface {

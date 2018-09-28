@@ -15,15 +15,23 @@ func TestKhash(t *testing.T) {
 	k.Set([]byte("d"), []byte("f"))
 
 	for i := 0; i < 1000; i++ {
-		name := fmt.Sprintf("hello%d", i)
-		fmt.Println(name)
-		k1 := db.KHash([]byte(name))
-		k1.Set([]byte("d"), []byte("f"))
+		k1 := db.KHash([]byte(fmt.Sprintf("hello%d", i)))
+		if err := k1.Set([]byte("d"), []byte("f")); err != nil {
+			panic(err.Error())
+		}
 	}
-
-	db.ScanAll(func(key, value []byte) error {
+	db.ScanAll(func(key, value []byte) {
 		fmt.Println(string(key), string(value))
-		return nil
 	})
+}
 
+func KHashNames() (names chan string, err error) {
+	names1 := make(chan string, 1)
+	names1 <- "hello"
+	return names1, nil
+}
+
+func TestName1(t *testing.T) {
+	a, _ := KHashNames()
+	fmt.Println(<-a)
 }

@@ -1,9 +1,9 @@
 package kdb
 
 var (
-	prefix     = []byte("px:")
-	dataPrefix = []byte("@@:")
-	prefixBk   = []byte("pxb:")
+	prefix          = []byte("px:")
+	dataPrefix      = []byte("@:")
+	khashSizePrefix = []byte("khashSize:")
 )
 
 func withPrefix(name []byte) []byte {

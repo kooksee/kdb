@@ -10,22 +10,20 @@ var cfg *config
 var once sync.Once
 
 type config struct {
-	db IKDB
+	db     *kDb
+	DbPath string
 }
 
 // InitKdb 初始化数据库
-func (c *config) InitKdb(paths ... string) {
-	path := filepath.Join("kdata", "db")
-	if len(paths) > 0 {
-		path = paths[0]
-	}
+func (c *config) InitKdb() {
 
-	mustNotErr("kdb.config.InitKdb", ensureDir(path, 0755))
+	mustNotErr("kdb.config.InitKdb", ensureDir(c.DbPath, 0755))
 
-	db, err := leveldb.OpenFile(path, nil)
+	db, err := leveldb.OpenFile(c.DbPath, nil)
 	mustNotErr("kdb.config.InitKdb,the db start fail", err)
 
-	c.db = &kDb{db: db, hmap: make(map[string]IKHash)}
+	c.db = &kDb{db: db, hmap: make(map[string]*kHash)}
+	c.db.khashSizeLoad()
 }
 
 // getDb 得到kDb实例
@@ -43,7 +41,9 @@ func (c *config) GetDb() IKDB {
 
 func DefaultConfig() *config {
 	once.Do(func() {
-		cfg = &config{}
+		cfg = &config{
+			DbPath: filepath.Join("kdata", "db"),
+		}
 	})
 	return cfg
 }
